@@ -22,6 +22,9 @@
     theme: DEFAULT_THEME,
   };
 
+  // bo góc gốc, sẽ scale theo kích thước
+  const BASE_RADIUS = 16;
+
   // ============================================================
   // 2. HELPERS
   // ============================================================
@@ -62,7 +65,7 @@
       default:
         `width:${width}px;max-width:100%;height:${height}px;` +
         `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
-        `position:relative;border-radius:16px;` +
+        `position:relative;border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${theme.red}26;` +
         `box-shadow:0 10px 30px ${theme.navy}26;` +
         `overflow:hidden;background:transparent;aspect-ratio:${aspect}`,
@@ -129,8 +132,9 @@
 
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
+    // border-radius sẽ được set động trong updateScale
     iframe.style.cssText =
-      'width:100%;height:100%;border:none;border-radius:16px;background:#fff';
+      'width:100%;height:100%;border:none;background:#fff';
     iframe.scrolling = 'no';
     iframe.loading = 'lazy';
     iframe.sandbox =
@@ -161,6 +165,7 @@
         if (!Number.isFinite(scaleFull) || scaleFull <= 0) scaleFull = 1;
         wrapper.style.transform = `scale(${scaleFull})`;
         container.style.height = `${vh}px`;
+        // radius fullscreen = 0 (đã set trong setFullscreen), không chỉnh ở đây
         return;
       }
 
@@ -174,13 +179,19 @@
 
       wrapper.style.transform = `scale(${scale})`;
       container.style.height = `${height * scale}px`;
+
+      // bo góc scale theo kích thước thực tế
+      const radius = BASE_RADIUS * scale;
+      container.style.borderRadius = `${radius}px`;
+      iframe.style.borderRadius = `${radius}px`;
     };
 
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
       iframe.style.boxShadow = state ? '0 0 60px rgba(0,0,0,.4)' : 'none';
-      iframe.style.borderRadius = state ? '0' : '16px';
+      iframe.style.borderRadius = state ? '0' : `${BASE_RADIUS}px`;
+      // container border-radius đã là 0 trong baseStyle.fullscreen
 
       updateScale();
       try {
