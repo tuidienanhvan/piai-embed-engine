@@ -1,6 +1,6 @@
 // piai-embed-engine.js
-// Phiên bản sạch sẽ, tối ưu 2025 – đã bỏ hoàn toàn ensureResponsiveStyle
-// Vẫn giữ nguyên mọi tính năng: fullscreen, iOS standalone, scale đẹp, không memory leak
+// Phiên bản 2025 – gọn, không dùng ensureResponsiveStyle
+// Tính năng: fullscreen, iOS standalone, scale mượt, không memory leak
 
 (function (global) {
   'use strict';
@@ -55,19 +55,32 @@
     if (!container) return;
 
     const containerId = container.id || id;
-    const { isIOS, isMobile } = detectDevice();
+    const { isIOS } = detectDevice();
 
-    // Style chính – đã có max-width:100% + aspect-ratio → responsive cực mạnh
+    // Style chính – background để transparent để không lộ màu nền
     const baseStyle = {
-      default: `width:${width}px;max-width:100%;height:${height}px;margin:20px auto;display:flex;justify-content:center;align-items:center;position:relative;border-radius:16px;border:1px solid ${theme.red}26;box-shadow:0 10px 30px ${theme.navy}26;overflow:hidden;background:${theme.bg};aspect-ratio:${aspect}`,
-      fullscreen: `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;margin:0;border-radius:0;z-index:99999;background:#000;border:none;box-shadow:none;display:flex;justify-content:center;align-items:center;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)`,
+      default:
+        `width:${width}px;max-width:100%;height:${height}px;` +
+        `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
+        `position:relative;border-radius:16px;` +
+        `border:1px solid ${theme.red}26;` +
+        `box-shadow:0 10px 30px ${theme.navy}26;` +
+        `overflow:hidden;background:transparent;aspect-ratio:${aspect}`,
+      fullscreen:
+        `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
+        `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
+        `box-shadow:none;display:flex;justify-content:center;align-items:center;` +
+        `overflow:hidden;` +
+        `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
+        `env(safe-area-inset-bottom) env(safe-area-inset-left)`,
     };
 
     container.style.cssText = baseStyle.default;
 
     const wrapper = document.createElement('div');
     wrapper.style.cssText =
-      `width:${width}px;height:${height}px;position:relative;transform-origin:center;transition:transform .3s ease;flex-shrink:0`;
+      `width:${width}px;height:${height}px;position:relative;` +
+      `transform-origin:center;transition:transform .3s ease;flex-shrink:0`;
 
     // ------------------------------------------------------------
     // 3.1. Generate HTML
@@ -126,7 +139,9 @@
     if (iosStandaloneUrl) iframe.dataset.iosStandaloneUrl = iosStandaloneUrl;
 
     iframe.onload = () => {
-      try { URL.revokeObjectURL(blobUrl); } catch {}
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch {}
     };
 
     // ============================================================
@@ -136,7 +151,10 @@
     let resizeRAF = null;
 
     const updateScale = () => {
+      if (!container || !wrapper) return;
+
       if (isFull) {
+        // Scale cho fullscreen (trong khung đen toàn màn hình)
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         let scaleFull = Math.min(vw / width, vh / height);
@@ -146,21 +164,13 @@
         return;
       }
 
-      if (!isMobile) {
-        wrapper.style.transform = 'scale(1)';
-        container.style.height = `${height}px`;
-        return;
-      }
-
-      // Mobile: scale để full width mà không bé xíu
+      // Inline: scale theo chiều rộng thực tế của container
       const rect = container.getBoundingClientRect();
-      const availableWidth = rect.width || window.innerWidth;
-      const availableHeight = Math.max(window.innerHeight - rect.top - 24, 0);
+      const availableWidth = rect.width || width;
 
-      let scale = availableWidth > 0 ? availableWidth / width : 1;
-      if (availableHeight > 0) scale = Math.min(scale, availableHeight / height);
-      scale = Math.min(scale, 1);
+      let scale = availableWidth / width;
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+      scale = Math.min(scale, 1); // Không phóng to quá kích thước gốc
 
       wrapper.style.transform = `scale(${scale})`;
       container.style.height = `${height * scale}px`;
@@ -194,7 +204,10 @@
         } else if (isFull) {
           setFullscreen(false);
         } else if (container.requestFullscreen) {
-          container.requestFullscreen().then(() => setFullscreen(true)).catch(() => setFullscreen(true));
+          container
+            .requestFullscreen()
+            .then(() => setFullscreen(true))
+            .catch(() => setFullscreen(true)); // fallback CSS full
         } else {
           setFullscreen(true);
         }
@@ -233,7 +246,10 @@
         for (const node of m.removedNodes) {
           if (node === container || (node.contains && node.contains(container))) {
             window.removeEventListener('message', onMessage);
-            document.removeEventListener('fullscreenchange', onFullscreenChange);
+            document.removeEventListener(
+              'fullscreenchange',
+              onFullscreenChange
+            );
             document.removeEventListener('keydown', onKeydown);
             window.removeEventListener('resize', onResize);
             window.removeEventListener('orientationchange', onResize);
