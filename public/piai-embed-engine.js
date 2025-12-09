@@ -85,7 +85,7 @@
     // Style chính – background để transparent để không lộ màu nền
     const baseStyle = {
       default:
-        `width:${width}px;max-width:100%;height:${height}px;` +
+        `width:100%;max-width:100%;height:100%;` +
         `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
         `position:relative;border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${theme.red}26;` +
