@@ -29,9 +29,9 @@
       secondary: '#4CAF50',
       bg: '#FFFFFF',
     },
-    neon: {
-      name: 'neon',
-      label: 'Neon',
+    night: {
+      name: 'night',
+      label: 'Night',
       primary: '#F1F6F9',
       accent: '#394867',
       secondary: '#9BA4B5',
