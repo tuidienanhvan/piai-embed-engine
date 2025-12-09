@@ -1,13 +1,13 @@
 // piai-embed-engine.js
-// Phiên bản 2025 v2.1 – Night theme + Text colors
-// Features: Event system, ResizeObserver, IntersectionObserver, Accessibility, Error handling
-// Theme: classic, educational, night + custom support
+// Phiên bản 2025 v2.1 - Night theme + Text colors + Bug fixes
+// Features: Event system, ResizeObserver, Theme switching, Accessibility
+// Themes: classic, educational, night
 
 (function (global) {
   'use strict';
 
   // ============================================================
-  // 1. CONSTANTS & THEMES
+  // CONSTANTS & THEMES
   // ============================================================
   
   const VERSION = '2.1.0';
@@ -20,8 +20,8 @@
       accent: '#b8860b',
       secondary: '#002b5c',
       bg: '#f9f7f5',
-      text: '#1a1a1a',        // Màu chữ chính
-      textLight: '#666666',   // Màu chữ phụ
+      text: '#1a1a1a',
+      textLight: '#666666',
     },
     educational: {
       name: 'educational',
@@ -40,7 +40,7 @@
       accent: '#394867',
       secondary: '#F1F6F9',
       bg: '#212A3E',
-      text: '#F1F6F9',        // Chữ sáng cho nền tối
+      text: '#F1F6F9',
       textLight: '#9BA4B5',
     },
   };
@@ -66,13 +66,14 @@
     '"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"';
 
   // ============================================================
-  // CSS BASE COMPONENTS - Tái sử dụng cho mọi embed
+  // CSS BASE - Complete with all fixes
   // ============================================================
   
   const generateBaseCSS = (theme) => `
 /* ═══════════════════════════════════════════════════════════════
-   PIAI EMBED BASE CSS - Auto-injected by Engine
+   PIAI EMBED BASE CSS v2.1
    Theme: ${theme.name || 'custom'}
+   Fixes: Overflow, Text colors, Hover direction
 ═══════════════════════════════════════════════════════════════ */
 
 :root {
@@ -91,13 +92,6 @@
   --piai-shadow-md: 0 4px 12px rgba(0,0,0,0.12);
   --piai-shadow-hover: 0 6px 20px rgba(0,0,0,0.15);
   
-  /* Spacing */
-  --piai-space-xs: 4px;
-  --piai-space-sm: 8px;
-  --piai-space-md: 12px;
-  --piai-space-lg: 16px;
-  --piai-space-xl: 24px;
-  
   /* Typography */
   --piai-font: ${SYSTEM_FONT_STACK};
   --piai-fs-xs: 0.7rem;
@@ -105,6 +99,13 @@
   --piai-fs-base: 0.85rem;
   --piai-fs-md: 0.95rem;
   --piai-fs-lg: 1.1rem;
+  
+  /* Spacing */
+  --piai-space-xs: 4px;
+  --piai-space-sm: 8px;
+  --piai-space-md: 12px;
+  --piai-space-lg: 16px;
+  --piai-space-xl: 24px;
   
   /* Radius */
   --piai-radius-sm: 4px;
@@ -118,14 +119,20 @@
 /* ═══════════════════════════════════════════════════════════════
    RESET & BASE
 ═══════════════════════════════════════════════════════════════ */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { 
+  margin: 0; 
+  padding: 0; 
+  box-sizing: border-box; 
+}
+
 html, body {
   font-family: var(--piai-font);
   font-size: 16px;
   line-height: 1.5;
   color: var(--piai-text);
   background: transparent;
-  width: 100%; height: 100%;
+  width: 100%; 
+  height: 100%;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -134,27 +141,30 @@ html, body {
    LAYOUT: WRAP
 ═══════════════════════════════════════════════════════════════ */
 .piai-wrap {
-  width: 100%; height: 100%;
+  width: 100%; 
+  height: 100%;
   position: relative;
   background: var(--piai-bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
 .piai-wrap.standalone {
   position: fixed;
-  top: 50%; left: 50%;
+  top: 50%; 
+  left: 50%;
   transform: translate(-50%, -50%);
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   HEADER (.piai-hdr)
+   HEADER - Single color (no gradient)
 ═══════════════════════════════════════════════════════════════ */
 .piai-hdr {
   background: var(--piai-primary);
   color: #fff;
   padding: var(--piai-space-sm) var(--piai-space-lg);
-  padding-right: 100px; /* Space for buttons */
+  padding-right: 100px; /* Space for 2 buttons */
   font-weight: 700;
   font-size: var(--piai-fs-md);
   display: flex;
@@ -164,11 +174,13 @@ html, body {
   flex-shrink: 0;
   position: relative;
 }
-.piai-hdr svg, .piai-hdr i { width: 20px; height: 20px; flex-shrink: 0; }
 
-/* Header variants */
-.piai-hdr.compact { padding: 6px 14px; font-size: var(--piai-fs-sm); padding-right: 100px; }
-.piai-hdr.compact svg { width: 16px; height: 16px; }
+.piai-hdr svg, 
+.piai-hdr i { 
+  width: 20px; 
+  height: 20px; 
+  flex-shrink: 0; 
+}
 
 /* ═══════════════════════════════════════════════════════════════
    BODY / MAIN CONTENT
@@ -177,21 +189,31 @@ html, body {
   flex: 1;
   min-height: 0;
   padding: var(--piai-space-sm) var(--piai-space-lg);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
-.piai-body.scrollable { overflow-y: auto; }
-.piai-body::-webkit-scrollbar { width: 4px; }
-.piai-body::-webkit-scrollbar-thumb { background: var(--piai-text-light); border-radius: 2px; }
-.piai-body::-webkit-scrollbar-thumb:hover { background: var(--piai-text); }
+
+.piai-body::-webkit-scrollbar { 
+  width: 6px; 
+}
+
+.piai-body::-webkit-scrollbar-thumb { 
+  background: var(--piai-text-light); 
+  border-radius: 3px; 
+}
+
+.piai-body::-webkit-scrollbar-thumb:hover { 
+  background: var(--piai-text); 
+}
 
 /* ═══════════════════════════════════════════════════════════════
-   DEFINITION BOX (.piai-def)
+   DEFINITION BOX
 ═══════════════════════════════════════════════════════════════ */
 .piai-def {
   background: var(--piai-bg);
-  border-left: 4px solid var(--piai-primary);
+  border-left: 5px solid var(--piai-primary);
   padding: var(--piai-space-sm) var(--piai-space-md);
   margin-bottom: var(--piai-space-sm);
   box-shadow: var(--piai-shadow-sm);
@@ -199,6 +221,7 @@ html, body {
   transition: var(--piai-transition);
   flex-shrink: 0;
 }
+
 .piai-def:hover {
   transform: translateY(-2px);
   border-left-color: var(--piai-accent);
@@ -212,35 +235,26 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
-.piai-def-title svg, .piai-def-title i { width: 16px; height: 16px; flex-shrink: 0; }
+
+.piai-def-title svg, 
+.piai-def-title i { 
+  width: 16px; 
+  height: 16px; 
+  flex-shrink: 0; 
+}
 
 .piai-def-content {
   font-size: var(--piai-fs-sm);
   line-height: 1.5;
   color: var(--piai-text);
 }
-.piai-def-content b, .piai-def-content strong { color: var(--piai-primary); }
 
-/* Definition variants */
-.piai-def.accent { border-left-color: var(--piai-accent); }
-.piai-def.accent .piai-def-title { color: var(--piai-accent); }
-
-.piai-def.secondary { border-left-color: var(--piai-secondary); }
-.piai-def.secondary .piai-def-title { color: var(--piai-secondary); }
-
-.piai-def.filled {
-  background: var(--piai-primary-light);
-  border-left-width: 5px;
+.piai-def-content b, 
+.piai-def-content strong { 
+  color: var(--piai-primary); 
 }
-
-.piai-def.compact {
-  padding: 6px 10px;
-  margin-bottom: 6px;
-}
-.piai-def.compact .piai-def-title { font-size: var(--piai-fs-sm); margin-bottom: 2px; }
-.piai-def.compact .piai-def-content { font-size: var(--piai-fs-xs); }
 
 /* ═══════════════════════════════════════════════════════════════
    GRID LAYOUT
@@ -250,30 +264,37 @@ html, body {
   gap: var(--piai-space-lg);
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
-.piai-grid.reverse { flex-direction: row-reverse; }
-.piai-grid.vertical { flex-direction: column; }
+
+.piai-grid.reverse { 
+  flex-direction: row-reverse; 
+}
+
+.piai-grid.vertical { 
+  flex-direction: column; 
+}
 
 /* ═══════════════════════════════════════════════════════════════
-   LIST (.piai-list)
+   LIST - Fixed overflow & hover direction
 ═══════════════════════════════════════════════════════════════ */
 .piai-list {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   overflow-y: auto;
-  overflow-x: hidden;  /* FIX: Ẩn scroll ngang */
-  padding-right: 4px;
+  overflow-x: hidden;
+  padding-right: 8px; /* Space for hover animation */
   list-style: none;
-  width: 100%;  /* FIX: Đảm bảo full width */
-  min-width: 0;  /* FIX: Cho phép shrink */
+  width: 100%;
+  min-width: 0;
 }
 
 .piai-list-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   padding: var(--piai-space-sm) var(--piai-space-md);
   background: var(--piai-bg);
   border-radius: var(--piai-radius-md);
@@ -281,11 +302,12 @@ html, body {
   transition: var(--piai-transition);
   font-size: var(--piai-fs-sm);
   color: var(--piai-text);
-  min-width: 0;  /* FIX: Cho phép flex shrink */
-  width: 100%;  /* FIX: Take full width */
+  min-width: 0;
+  width: 100%;
 }
+
 .piai-list-item:hover {
-  transform: translateX(4px);
+  transform: translateX(-4px); /* FIX: Move LEFT instead of right */
   border-color: var(--piai-accent);
   box-shadow: 0 2px 8px var(--piai-accent-light);
 }
@@ -294,8 +316,14 @@ html, body {
   color: var(--piai-accent);
   margin-top: 2px;
   transition: var(--piai-transition);
-  flex-shrink: 0;  /* FIX: Icon không bị shrink */
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
 }
+
 .piai-list-item:hover .piai-ico {
   color: var(--piai-primary);
   transform: scale(1.15) rotate(8deg);
@@ -303,38 +331,18 @@ html, body {
 
 .piai-list-item-content { 
   flex: 1; 
-  min-width: 0;  /* FIX: Cho phép text wrap */
-  word-wrap: break-word;  /* FIX: Break long words */
-  overflow-wrap: break-word;  /* FIX: Modern browsers */
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
-.piai-list-item-title { 
-  font-weight: 600; 
-  margin-bottom: 2px; 
-  color: var(--piai-text);
-  word-wrap: break-word;  /* FIX */
-}
-.piai-list-item-desc { 
-  color: var(--piai-text-light); 
-  line-height: 1.4;
-  word-wrap: break-word;  /* FIX */
+
+.piai-list-item-content strong {
+  color: var(--piai-primary);
+  font-weight: 700;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ICON (.piai-ico)
-═══════════════════════════════════════════════════════════════ */
-.piai-ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px; height: 18px;
-  flex-shrink: 0;
-}
-.piai-ico svg { width: 100%; height: 100%; }
-.piai-ico.sm { width: 14px; height: 14px; }
-.piai-ico.lg { width: 24px; height: 24px; }
-
-/* ═══════════════════════════════════════════════════════════════
-   VISUAL AREA (.piai-visual)
+   VISUAL AREA
 ═══════════════════════════════════════════════════════════════ */
 .piai-visual {
   flex: 0 0 280px;
@@ -344,12 +352,23 @@ html, body {
   align-items: center;
   overflow: hidden;
 }
-.piai-visual.wide { flex: 0 0 340px; }
-.piai-visual.narrow { flex: 0 0 200px; }
-.piai-visual svg { width: 100%; height: auto; max-height: 100%; }
+
+.piai-visual.wide { 
+  flex: 0 0 340px; 
+}
+
+.piai-visual.narrow { 
+  flex: 0 0 200px; 
+}
+
+.piai-visual svg { 
+  width: 100%; 
+  height: auto; 
+  max-height: 100%; 
+}
 
 /* ═══════════════════════════════════════════════════════════════
-   HEADER BUTTONS
+   HEADER BUTTONS (Theme + Fullscreen)
 ═══════════════════════════════════════════════════════════════ */
 .hdr-btn {
   position: absolute;
@@ -366,14 +385,24 @@ html, body {
   justify-content: center;
   transition: var(--piai-transition);
 }
+
 .hdr-btn:hover {
   color: #fff;
   transform: scale(1.1);
 }
-.hdr-btn svg { width: 22px; height: 22px; }
 
-.theme-btn { right: 48px; }
-.fs-btn { right: 0; }
+.hdr-btn svg { 
+  width: 22px; 
+  height: 22px; 
+}
+
+.theme-btn { 
+  right: 48px; 
+}
+
+.fs-btn { 
+  right: 0; 
+}
 
 /* ═══════════════════════════════════════════════════════════════
    LOADER
@@ -388,20 +417,34 @@ html, body {
   z-index: 100;
   transition: opacity 0.3s;
 }
-.piai-loader.hide { opacity: 0; pointer-events: none; }
+
+.piai-loader.hide { 
+  opacity: 0; 
+  pointer-events: none; 
+}
+
 .piai-loader-spinner {
-  width: 32px; height: 32px;
+  width: 32px; 
+  height: 32px;
   border: 3px solid var(--piai-text-light);
   border-top-color: var(--piai-primary);
   border-radius: 50%;
   animation: piai-spin 0.8s linear infinite;
 }
-@keyframes piai-spin { to { transform: rotate(360deg); } }
+
+@keyframes piai-spin { 
+  to { 
+    transform: rotate(360deg); 
+  } 
+}
 
 /* ═══════════════════════════════════════════════════════════════
    MATHJAX OVERRIDES
 ═══════════════════════════════════════════════════════════════ */
-mjx-container { font-size: 105% !important; margin: 0 !important; }
+mjx-container { 
+  font-size: 105% !important; 
+  margin: 0 !important; 
+}
 
 /* ═══════════════════════════════════════════════════════════════
    UTILITIES
@@ -422,17 +465,35 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE
 ═══════════════════════════════════════════════════════════════ */
-@media (max-width: 600px) {
-  .piai-grid { flex-direction: column; }
-  .piai-grid.reverse { flex-direction: column-reverse; }
-  .piai-visual { flex: 0 0 140px; width: 100%; }
-  .piai-hdr { padding: 6px 12px; font-size: var(--piai-fs-sm); padding-right: 100px; }
-  .piai-body { padding: var(--piai-space-sm); }
+@media (max-width: 650px) {
+  .piai-grid { 
+    flex-direction: column; 
+  }
+  
+  .piai-grid.reverse { 
+    flex-direction: column-reverse; 
+  }
+  
+  .piai-visual { 
+    flex: 0 0 auto; 
+    width: 100%; 
+    padding: 10px; 
+  }
+  
+  .piai-hdr { 
+    padding: 10px 16px; 
+    padding-right: 100px; 
+    font-size: var(--piai-fs-sm); 
+  }
+  
+  .piai-body { 
+    padding: var(--piai-space-sm); 
+  }
 }
 `;
 
   // ============================================================
-  // 2. UTILITIES
+  // UTILITIES
   // ============================================================
   
   const Utils = {
@@ -491,7 +552,7 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   };
 
   // ============================================================
-  // 3. EVENT EMITTER
+  // EVENT EMITTER
   // ============================================================
   
   class EventEmitter {
@@ -539,7 +600,7 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   }
 
   // ============================================================
-  // 4. EMBED INSTANCE CLASS (giữ nguyên logic, chỉ update CSS vars)
+  // EMBED INSTANCE CLASS
   // ============================================================
   
   class EmbedInstance extends EventEmitter {
@@ -1107,7 +1168,7 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   }
 
   // ============================================================
-  // 5. FACTORY FUNCTIONS
+  // FACTORY FUNCTIONS
   // ============================================================
   
   const instances = new Map();
@@ -1133,7 +1194,7 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   }
 
   // ============================================================
-  // 6. EXPORT
+  // EXPORT
   // ============================================================
   
   const api = {
