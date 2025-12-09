@@ -1,7 +1,7 @@
 // piai-embed-engine.js
-// Phiên bản 2025 v2 – Tối ưu hoàn chỉnh
+// Phiên bản 2025 v2.1 – Night theme + Text colors
 // Features: Event system, ResizeObserver, IntersectionObserver, Accessibility, Error handling
-// Theme: classic, educational, neon + custom support
+// Theme: classic, educational, night + custom support
 
 (function (global) {
   'use strict';
@@ -10,7 +10,7 @@
   // 1. CONSTANTS & THEMES
   // ============================================================
   
-  const VERSION = '2.0.0';
+  const VERSION = '2.1.0';
   
   const THEMES = {
     classic: {
@@ -20,6 +20,8 @@
       accent: '#b8860b',
       secondary: '#002b5c',
       bg: '#f9f7f5',
+      text: '#1a1a1a',        // Màu chữ chính
+      textLight: '#666666',   // Màu chữ phụ
     },
     educational: {
       name: 'educational',
@@ -28,14 +30,18 @@
       accent: '#FFC107',
       secondary: '#4CAF50',
       bg: '#FFFFFF',
+      text: '#212121',
+      textLight: '#757575',
     },
     night: {
       name: 'night',
       label: 'Night',
-      primary: '#F1F6F9',
+      primary: '#9BA4B5',
       accent: '#394867',
-      secondary: '#9BA4B5',
+      secondary: '#F1F6F9',
       bg: '#212A3E',
+      text: '#F1F6F9',        // Chữ sáng cho nền tối
+      textLight: '#9BA4B5',
     },
   };
 
@@ -74,6 +80,8 @@
   --piai-accent: ${theme.accent};
   --piai-secondary: ${theme.secondary};
   --piai-bg: ${theme.bg};
+  --piai-text: ${theme.text};
+  --piai-text-light: ${theme.textLight};
   
   /* Derived colors */
   --piai-primary-light: ${theme.primary}15;
@@ -115,7 +123,7 @@ html, body {
   font-family: var(--piai-font);
   font-size: 16px;
   line-height: 1.5;
-  color: var(--piai-secondary);
+  color: var(--piai-text);
   background: transparent;
   width: 100%; height: 100%;
   overflow: hidden;
@@ -143,10 +151,10 @@ html, body {
    HEADER (.piai-hdr)
 ═══════════════════════════════════════════════════════════════ */
 .piai-hdr {
-  background: linear-gradient(135deg, var(--piai-primary), color-mix(in srgb, var(--piai-primary) 70%, black));
+  background: var(--piai-primary);
   color: #fff;
   padding: var(--piai-space-sm) var(--piai-space-lg);
-  padding-right: 48px; /* Space for fullscreen button */
+  padding-right: 100px; /* Space for buttons */
   font-weight: 700;
   font-size: var(--piai-fs-md);
   display: flex;
@@ -159,15 +167,8 @@ html, body {
 .piai-hdr svg, .piai-hdr i { width: 20px; height: 20px; flex-shrink: 0; }
 
 /* Header variants */
-.piai-hdr.compact { padding: 6px 14px; font-size: var(--piai-fs-sm); }
+.piai-hdr.compact { padding: 6px 14px; font-size: var(--piai-fs-sm); padding-right: 100px; }
 .piai-hdr.compact svg { width: 16px; height: 16px; }
-
-.piai-hdr.gradient-gold {
-  background: linear-gradient(135deg, var(--piai-accent), color-mix(in srgb, var(--piai-accent) 70%, black));
-}
-.piai-hdr.gradient-navy {
-  background: linear-gradient(135deg, var(--piai-secondary), color-mix(in srgb, var(--piai-secondary) 70%, black));
-}
 
 /* ═══════════════════════════════════════════════════════════════
    BODY / MAIN CONTENT
@@ -182,14 +183,14 @@ html, body {
 }
 .piai-body.scrollable { overflow-y: auto; }
 .piai-body::-webkit-scrollbar { width: 4px; }
-.piai-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
-.piai-body::-webkit-scrollbar-thumb:hover { background: #bbb; }
+.piai-body::-webkit-scrollbar-thumb { background: var(--piai-text-light); border-radius: 2px; }
+.piai-body::-webkit-scrollbar-thumb:hover { background: var(--piai-text); }
 
 /* ═══════════════════════════════════════════════════════════════
    DEFINITION BOX (.piai-def)
 ═══════════════════════════════════════════════════════════════ */
 .piai-def {
-  background: #fff;
+  background: var(--piai-bg);
   border-left: 4px solid var(--piai-primary);
   padding: var(--piai-space-sm) var(--piai-space-md);
   margin-bottom: var(--piai-space-sm);
@@ -218,7 +219,7 @@ html, body {
 .piai-def-content {
   font-size: var(--piai-fs-sm);
   line-height: 1.5;
-  color: var(--piai-secondary);
+  color: var(--piai-text);
 }
 .piai-def-content b, .piai-def-content strong { color: var(--piai-primary); }
 
@@ -271,17 +272,17 @@ html, body {
   align-items: flex-start;
   gap: 10px;
   padding: var(--piai-space-sm) var(--piai-space-md);
-  background: #fff;
+  background: var(--piai-bg);
   border-radius: var(--piai-radius-md);
-  border: 1px solid #eee;
+  border: 1px solid var(--piai-text-light);
   transition: var(--piai-transition);
   font-size: var(--piai-fs-sm);
+  color: var(--piai-text);
 }
 .piai-list-item:hover {
   transform: translateX(4px);
-  background: #fffcf5;
   border-color: var(--piai-accent);
-  box-shadow: 0 2px 8px rgba(184,134,11,0.15);
+  box-shadow: 0 2px 8px var(--piai-accent-light);
 }
 
 .piai-list-item .piai-ico {
@@ -295,8 +296,8 @@ html, body {
 }
 
 .piai-list-item-content { flex: 1; min-width: 0; }
-.piai-list-item-title { font-weight: 600; margin-bottom: 2px; }
-.piai-list-item-desc { color: #666; line-height: 1.4; }
+.piai-list-item-title { font-weight: 600; margin-bottom: 2px; color: var(--piai-text); }
+.piai-list-item-desc { color: var(--piai-text-light); line-height: 1.4; }
 
 /* ═══════════════════════════════════════════════════════════════
    ICON (.piai-ico)
@@ -328,108 +329,14 @@ html, body {
 .piai-visual svg { width: 100%; height: auto; max-height: 100%; }
 
 /* ═══════════════════════════════════════════════════════════════
-   EXAMPLE BOX
+   HEADER BUTTONS
 ═══════════════════════════════════════════════════════════════ */
-.piai-example {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed #ddd;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: var(--piai-fs-sm);
-}
-.piai-example-tag {
-  font-size: var(--piai-fs-xs);
-  font-weight: 700;
-  color: #fff;
-  background: var(--piai-accent);
-  padding: 2px 6px;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   CARD (.piai-card)
-═══════════════════════════════════════════════════════════════ */
-.piai-card {
-  background: #fff;
-  border-radius: var(--piai-radius-md);
-  padding: var(--piai-space-md);
-  box-shadow: var(--piai-shadow-sm);
-  border: 1px solid #eee;
-  transition: var(--piai-transition);
-}
-.piai-card:hover {
-  box-shadow: var(--piai-shadow-md);
-  transform: translateY(-2px);
-}
-.piai-card-header {
-  font-weight: 700;
-  color: var(--piai-primary);
-  margin-bottom: var(--piai-space-sm);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   BUTTONS
-═══════════════════════════════════════════════════════════════ */
-.piai-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  font-size: var(--piai-fs-sm);
-  font-weight: 600;
-  border: none;
-  border-radius: var(--piai-radius-md);
-  cursor: pointer;
-  transition: var(--piai-transition);
-  font-family: inherit;
-}
-.piai-btn:active { transform: scale(0.97); }
-
-.piai-btn.primary {
-  background: var(--piai-primary);
-  color: #fff;
-}
-.piai-btn.primary:hover { filter: brightness(1.1); }
-
-.piai-btn.accent {
-  background: var(--piai-accent);
-  color: #fff;
-}
-.piai-btn.accent:hover { filter: brightness(1.1); }
-
-.piai-btn.outline {
-  background: transparent;
-  border: 2px solid var(--piai-primary);
-  color: var(--piai-primary);
-}
-.piai-btn.outline:hover {
-  background: var(--piai-primary);
-  color: #fff;
-}
-
-.piai-btn.ghost {
-  background: transparent;
-  color: var(--piai-primary);
-}
-.piai-btn.ghost:hover { background: var(--piai-primary-light); }
-
-/* ═══════════════════════════════════════════════════════════════
-   FULLSCREEN BUTTON (Fixed position)
-═══════════════════════════════════════════════════════════════ */
-.piai-fs-btn {
+.hdr-btn {
   position: absolute;
-  top: 0; right: 0;
+  top: 0;
   z-index: 999;
-  width: 40px; height: 40px;
+  width: 48px;
+  height: 48px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -439,28 +346,14 @@ html, body {
   justify-content: center;
   transition: var(--piai-transition);
 }
-.piai-fs-btn:hover {
+.hdr-btn:hover {
   color: #fff;
   transform: scale(1.1);
 }
-.piai-fs-btn svg { width: 20px; height: 20px; }
+.hdr-btn svg { width: 22px; height: 22px; }
 
-.piai-close-btn {
-  position: absolute;
-  top: 6px; right: 6px;
-  z-index: 999;
-  width: 32px; height: 32px;
-  background: rgba(0,0,0,0.5);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--piai-transition);
-}
-.piai-close-btn:hover { background: var(--piai-primary); }
+.theme-btn { right: 48px; }
+.fs-btn { right: 0; }
 
 /* ═══════════════════════════════════════════════════════════════
    LOADER
@@ -478,7 +371,7 @@ html, body {
 .piai-loader.hide { opacity: 0; pointer-events: none; }
 .piai-loader-spinner {
   width: 32px; height: 32px;
-  border: 3px solid #eee;
+  border: 3px solid var(--piai-text-light);
   border-top-color: var(--piai-primary);
   border-radius: 50%;
   animation: piai-spin 0.8s linear infinite;
@@ -513,22 +406,16 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   .piai-grid { flex-direction: column; }
   .piai-grid.reverse { flex-direction: column-reverse; }
   .piai-visual { flex: 0 0 140px; width: 100%; }
-  .piai-hdr { padding: 6px 12px; font-size: var(--piai-fs-sm); }
+  .piai-hdr { padding: 6px 12px; font-size: var(--piai-fs-sm); padding-right: 100px; }
   .piai-body { padding: var(--piai-space-sm); }
 }
 `;
-
-  const SYSTEM_FONT_CSS =
-    '\n<style>\n' +
-    '  * { font-family: ' + SYSTEM_FONT_STACK + ' !important; }\n' +
-    '</style>';
 
   // ============================================================
   // 2. UTILITIES
   // ============================================================
   
   const Utils = {
-    // Device detection
     detectDevice() {
       const ua = navigator.userAgent || '';
       return {
@@ -539,17 +426,14 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       };
     },
 
-    // Check prefers-reduced-motion
     prefersReducedMotion() {
       return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     },
 
-    // Check dark mode preference
     prefersDarkMode() {
       return window.matchMedia?.('(prefers-color-scheme: dark)').matches;
     },
 
-    // Deep merge objects
     deepMerge(target, source) {
       const result = { ...target };
       for (const key in source) {
@@ -562,12 +446,10 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return result;
     },
 
-    // Generate unique ID
     uid(prefix = 'piai') {
       return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     },
 
-    // Throttle function
     throttle(fn, wait) {
       let lastTime = 0;
       return function (...args) {
@@ -579,7 +461,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       };
     },
 
-    // Debounce function
     debounce(fn, wait) {
       let timeout;
       return function (...args) {
@@ -638,7 +519,7 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   }
 
   // ============================================================
-  // 4. EMBED INSTANCE CLASS
+  // 4. EMBED INSTANCE CLASS (giữ nguyên logic, chỉ update CSS vars)
   // ============================================================
   
   class EmbedInstance extends EventEmitter {
@@ -655,26 +536,17 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         isDestroyed: false,
       };
       
-      // DOM references
       this.container = null;
       this.wrapper = null;
       this.iframe = null;
-      
-      // Cleanup functions
       this._cleanups = [];
       
-      // Resolve theme
       this.theme = this._resolveTheme(this.config.theme || this.config.themeName);
-      
-      // Check reduced motion
       this._reduceMotion = this.config.reduceMotion === 'auto' 
         ? Utils.prefersReducedMotion() 
         : this.config.reduceMotion;
     }
 
-    // --------------------------------------------------------
-    // Theme Resolution
-    // --------------------------------------------------------
     _resolveTheme(themeInput) {
       if (typeof themeInput === 'string') {
         return THEMES[themeInput] || THEMES.classic;
@@ -685,38 +557,28 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return THEMES.classic;
     }
 
-    // --------------------------------------------------------
-    // Theme Switching API
-    // --------------------------------------------------------
-    
-    // Switch to a different theme
     setTheme(themeName) {
       if (this.state.isDestroyed) return this;
       
-      // Validate theme exists
       if (!THEMES[themeName]) {
         this._log('Invalid theme:', themeName);
         return this;
       }
       
       const oldThemeName = this.theme.name || this.config.themeName;
-      if (oldThemeName === themeName) return this; // No change
+      if (oldThemeName === themeName) return this;
       
-      // Update theme
       this.theme = this._resolveTheme(themeName);
       this.config.themeName = themeName;
       
-      // Update container border color
       if (this.container && !this.state.isFullscreen) {
         this.container.style.borderColor = `${this.theme.primary}26`;
       }
       
-      // Update iframe background
       if (this.iframe) {
         this.iframe.style.background = this.theme.bg;
       }
       
-      // Update CSS variables inside iframe
       this._postMessage({ 
         type: 'themeChange', 
         theme: this.theme,
@@ -726,13 +588,14 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
           '--piai-accent': this.theme.accent,
           '--piai-secondary': this.theme.secondary,
           '--piai-bg': this.theme.bg,
+          '--piai-text': this.theme.text,
+          '--piai-text-light': this.theme.textLight,
           '--piai-primary-light': `${this.theme.primary}15`,
           '--piai-primary-border': `${this.theme.primary}26`,
           '--piai-accent-light': `${this.theme.accent}20`,
         }
       });
       
-      // Emit event cho external listeners
       this.emit('themechange', { 
         theme: this.theme, 
         themeName: themeName,
@@ -744,19 +607,14 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return this;
     }
 
-    // Get current theme name
     getThemeName() {
       return this.theme.name || this.config.themeName;
     }
     
-    // Get current theme object
     getTheme() {
       return this.theme;
     }
 
-    // --------------------------------------------------------
-    // Style Generation
-    // --------------------------------------------------------
     _getStyles() {
       const { width, height, aspect } = this.config;
       const transition = this._reduceMotion ? 'none' : 'transform .3s ease';
@@ -820,14 +678,10 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       };
     }
 
-    // --------------------------------------------------------
-    // HTML Processing
-    // --------------------------------------------------------
     _injectSystemFontCss(html) {
       if (!html || typeof html !== 'string') return html;
       if (html.includes('__NO_SYSTEM_FONT_OVERRIDE__')) return html;
       
-      // Generate base CSS với theme hiện tại
       const baseCSS = `<style id="piai-base-css">${generateBaseCSS(this.theme)}</style>`;
       
       if (html.includes('<head>')) {
@@ -847,6 +701,7 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         height,
         aspect,
         theme: this.theme,
+        themeName: this.theme.name,
         isIOS: this.device.isIOS,
         isMobile: this.device.isMobile,
         isStandalone,
@@ -859,9 +714,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return this._injectSystemFontCss(generatedHtml);
     }
 
-    // --------------------------------------------------------
-    // Scaling Logic
-    // --------------------------------------------------------
     _updateScale() {
       if (!this.container || !this.wrapper || this.state.isDestroyed) return;
 
@@ -878,7 +730,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         return;
       }
 
-      // Inline mode
       const rect = this.container.getBoundingClientRect();
       const availableWidth = rect.width || width;
       let scale = Math.min(availableWidth / width, 1);
@@ -894,9 +745,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       this.emit('scale', { scale, width: width * scale, height: height * scale });
     }
 
-    // --------------------------------------------------------
-    // Fullscreen Control
-    // --------------------------------------------------------
     _setFullscreen(state) {
       const styles = this._getStyles();
       
@@ -905,12 +753,10 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       this.iframe.style.boxShadow = state ? '0 0 60px rgba(0,0,0,.4)' : 'none';
       this.iframe.style.borderRadius = state ? '0' : `${BASE_RADIUS}px`;
 
-      // ARIA
       this.container.setAttribute('aria-expanded', state);
       
       this._updateScale();
       
-      // Notify iframe
       this._postMessage({ type: 'fullscreenState', isFullscreen: state });
       
       this.emit('fullscreen', { isFullscreen: state });
@@ -935,9 +781,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       }
     }
 
-    // --------------------------------------------------------
-    // Communication
-    // --------------------------------------------------------
     _postMessage(data) {
       try {
         this.iframe?.contentWindow?.postMessage(
@@ -949,24 +792,22 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       }
     }
 
-    // Send custom data to iframe
     send(type, payload) {
       this._postMessage({ type, payload });
     }
 
-    // --------------------------------------------------------
-    // Event Handlers
-    // --------------------------------------------------------
     _setupEventListeners() {
       const { width, height, lazyLoad, lazyLoadMargin, focusTrap } = this.config;
 
-      // Message handler
       const onMessage = (e) => {
         if (!e.data || e.data.id !== this.id) return;
         
         switch (e.data.type) {
           case 'toggleFullscreen':
             this.toggleFullscreen();
+            break;
+          case 'themeSwitch':
+            if (e.data.themeName) this.setTheme(e.data.themeName);
             break;
           case 'ready':
             this.state.isReady = true;
@@ -979,7 +820,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       window.addEventListener('message', onMessage);
       this._cleanups.push(() => window.removeEventListener('message', onMessage));
 
-      // Fullscreen change
       const onFullscreenChange = () => {
         if (this.device.isIOS) return;
         if (document.fullscreenElement === this.container) {
@@ -991,7 +831,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       document.addEventListener('fullscreenchange', onFullscreenChange);
       this._cleanups.push(() => document.removeEventListener('fullscreenchange', onFullscreenChange));
 
-      // Escape key
       const onKeydown = (e) => {
         if (e.key === 'Escape' && this.state.isFullscreen && !document.fullscreenElement) {
           this._setFullscreen(false);
@@ -1000,13 +839,11 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       document.addEventListener('keydown', onKeydown);
       this._cleanups.push(() => document.removeEventListener('keydown', onKeydown));
 
-      // ResizeObserver (better than window.resize)
       if (typeof ResizeObserver !== 'undefined') {
         const ro = new ResizeObserver(Utils.throttle(() => this._updateScale(), 16));
         ro.observe(this.container);
         this._cleanups.push(() => ro.disconnect());
       } else {
-        // Fallback
         const onResize = Utils.throttle(() => this._updateScale(), 16);
         window.addEventListener('resize', onResize);
         window.addEventListener('orientationchange', onResize);
@@ -1016,7 +853,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         });
       }
 
-      // IntersectionObserver for lazy loading visibility tracking
       if (typeof IntersectionObserver !== 'undefined') {
         const io = new IntersectionObserver(
           (entries) => {
@@ -1037,7 +873,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         this._cleanups.push(() => io.disconnect());
       }
 
-      // Focus trap for accessibility (optional)
       if (focusTrap) {
         const onFocusIn = (e) => {
           if (this.state.isFullscreen && !this.container.contains(e.target)) {
@@ -1048,7 +883,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         this._cleanups.push(() => document.removeEventListener('focusin', onFocusIn));
       }
 
-      // Reduced motion change
       if (window.matchMedia) {
         const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
         const onMotionChange = (e) => {
@@ -1064,18 +898,12 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       }
     }
 
-    // --------------------------------------------------------
-    // Logging
-    // --------------------------------------------------------
     _log(...args) {
       if (this.config.debug) {
         console.log(`[PiaiEmbed:${this.id}]`, ...args);
       }
     }
 
-    // --------------------------------------------------------
-    // Render
-    // --------------------------------------------------------
     render() {
       if (this.state.isDestroyed) {
         console.error('PiaiEmbed: Cannot render destroyed instance');
@@ -1084,7 +912,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
 
       const { container: containerFromConfig, id, lazyLoad } = this.config;
 
-      // Find container
       this.container = containerFromConfig ||
         (typeof id === 'string' ? document.getElementById(id) : null);
 
@@ -1094,23 +921,19 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         return this;
       }
 
-      // Apply container ID
       if (!this.container.id) this.container.id = this.id;
 
       const styles = this._getStyles();
 
-      // Setup container
       this.container.style.cssText = styles.container.default;
       this.container.setAttribute('role', 'application');
       this.container.setAttribute('aria-label', 'Interactive embed');
       this.container.setAttribute('aria-expanded', 'false');
 
-      // Create wrapper
       this.wrapper = document.createElement('div');
       this.wrapper.style.cssText = styles.wrapper;
       this.wrapper.className = 'piai-embed-wrapper';
 
-      // Generate HTML
       const iframeHtml = this._generateHTML(false);
       if (!iframeHtml) {
         console.error('PiaiEmbed: No HTML content');
@@ -1118,7 +941,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         return this;
       }
 
-      // Create blob URL
       let blobUrl;
       try {
         const blob = new Blob([iframeHtml], { type: 'text/html' });
@@ -1129,7 +951,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         return this;
       }
 
-      // iOS standalone URL
       let iosStandaloneUrl = '';
       if (this.device.isIOS) {
         try {
@@ -1143,7 +964,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         }
       }
 
-      // Create iframe
       this.iframe = document.createElement('iframe');
       this.iframe.className = 'piai-embed-iframe';
       this.iframe.style.cssText = styles.iframe;
@@ -1161,7 +981,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         });
       }
 
-      // Load handling
       this.iframe.onload = () => {
         try { URL.revokeObjectURL(blobUrl); } catch {}
         this._log('Iframe loaded');
@@ -1173,17 +992,13 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
         this.emit('error', { message: 'Iframe load error', error: e });
       };
 
-      // Set src (triggers load)
       this.iframe.src = blobUrl;
 
-      // Mount
       this.wrapper.appendChild(this.iframe);
       this.container.appendChild(this.wrapper);
 
-      // Setup events
       this._setupEventListeners();
 
-      // Initial scale
       this._updateScale();
 
       this._log('Rendered');
@@ -1192,9 +1007,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return this;
     }
 
-    // --------------------------------------------------------
-    // Update Config
-    // --------------------------------------------------------
     update(newOptions) {
       if (this.state.isDestroyed) return this;
       
@@ -1210,9 +1022,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return this;
     }
 
-    // --------------------------------------------------------
-    // Refresh Content
-    // --------------------------------------------------------
     refresh() {
       if (this.state.isDestroyed || !this.iframe) return this;
       
@@ -1236,26 +1045,20 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       return this;
     }
 
-    // --------------------------------------------------------
-    // Destroy
-    // --------------------------------------------------------
     destroy() {
       if (this.state.isDestroyed) return;
       
       this._log('Destroying');
       
-      // Run all cleanups
       this._cleanups.forEach(fn => {
         try { fn(); } catch {}
       });
       this._cleanups = [];
       
-      // Remove DOM
       if (this.wrapper && this.wrapper.parentNode) {
         this.wrapper.parentNode.removeChild(this.wrapper);
       }
       
-      // Clear references
       this.container = null;
       this.wrapper = null;
       this.iframe = null;
@@ -1266,9 +1069,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
       this.removeAllListeners();
     }
 
-    // --------------------------------------------------------
-    // Getters
-    // --------------------------------------------------------
     get isFullscreen() {
       return this.state.isFullscreen;
     }
@@ -1290,7 +1090,6 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   // 5. FACTORY FUNCTIONS
   // ============================================================
   
-  // Track all instances
   const instances = new Map();
 
   function render(options) {
@@ -1318,42 +1117,26 @@ mjx-container { font-size: 105% !important; margin: 0 !important; }
   // ============================================================
   
   const api = {
-    // Core
     render,
     EmbedInstance,
-    
-    // Instance management
     get,
     getAll,
     destroyAll,
-    
-    // Themes
     themes: THEMES,
-    themeNames: Object.keys(THEMES),  // ['classic', 'educational', 'neon']
+    themeNames: Object.keys(THEMES),
     getTheme: (name) => THEMES[name] || THEMES.classic,
-    
-    // CSS Generation (for advanced usage)
     generateBaseCSS,
-    
-    // Utilities
     utils: Utils,
-    
-    // Defaults
     defaults: { ...DEFAULT_CONFIG },
-    
-    // Version
     version: VERSION,
   };
 
-  // AMD
   if (typeof define === 'function' && define.amd) {
     define([], () => api);
   }
-  // CommonJS
   else if (typeof module === 'object' && module.exports) {
     module.exports = api;
   }
-  // Browser global
   global.PiaiEmbed = api;
 
 })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this);
