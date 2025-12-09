@@ -32,10 +32,10 @@
     neon: {
       name: 'neon',
       label: 'Neon',
-      primary: '#00FFFF',
-      accent: '#FF00FF',
-      secondary: '#00FF00',
-      bg: '#0a0a0a',
+      primary: '#F1F6F9',
+      accent: '#394867',
+      secondary: '#9BA4B5',
+      bg: '#212A3E',
     },
   };
 
