@@ -89,7 +89,6 @@
         `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
         `position:relative;border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${theme.red}26;` +
-        `box-shadow:0 10px 30px ${theme.navy}26;` +
         `overflow:hidden;background:transparent;aspect-ratio:${aspect};` +
         `font-family:${SYSTEM_FONT_STACK}`,
       fullscreen:
