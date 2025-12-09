@@ -48,10 +48,7 @@
 
   const BASE_RADIUS = 16;
 
-  const SYSTEM_FONT_STACK =
-    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,' +
-    '"Helvetica Neue",Arial,"Noto Sans",sans-serif,' +
-    '"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"';
+  const SYSTEM_FONT_STACK = 'Be Vietnam Pro';
 
   const SYSTEM_FONT_CSS =
     '\n<style>\n' +
