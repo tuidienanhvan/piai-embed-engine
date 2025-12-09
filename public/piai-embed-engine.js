@@ -25,14 +25,36 @@
   // bo góc gốc, sẽ scale theo kích thước
   const BASE_RADIUS = 16;
 
+  // System font stack – dùng cho cả container và nội dung trong iframe
+  const SYSTEM_FONT_STACK =
+    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,' +
+    '"Helvetica Neue",Arial,"Noto Sans",sans-serif,' +
+    '"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"';
+
+  const SYSTEM_FONT_CSS =
+    '\n<style>\n' +
+    '  * {\n' +
+    '    font-family: ' + SYSTEM_FONT_STACK + ' !important;\n' +
+    '  }\n' +
+    '</style>';
+
   // ============================================================
   // 2. HELPERS
   // ============================================================
   function detectDevice() {
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-    const isMobile = isIOS || /Mobi|Android/i.test(ua);
-    return { isIOS, isMobile };
+    return { isIOS };
+  }
+
+  function injectSystemFontCss(html) {
+    if (!html || typeof html !== 'string') return html;
+    // Cho phép "thoát" override nếu sau này cần:
+    if (html.includes('__NO_SYSTEM_FONT_OVERRIDE__')) return html;
+    if (html.includes('<head>')) {
+      return html.replace('<head>', '<head>' + SYSTEM_FONT_CSS);
+    }
+    return SYSTEM_FONT_CSS + html;
   }
 
   // ============================================================
@@ -67,14 +89,17 @@
         `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
         `position:relative;border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${theme.red}26;` +
-        `overflow:hidden;background:transparent;aspect-ratio:${aspect}`,
+        `box-shadow:0 10px 30px ${theme.navy}26;` +
+        `overflow:hidden;background:transparent;aspect-ratio:${aspect};` +
+        `font-family:${SYSTEM_FONT_STACK}`,
       fullscreen:
         `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
         `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
         `box-shadow:none;display:flex;justify-content:center;align-items:center;` +
         `overflow:hidden;` +
         `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
-        `env(safe-area-inset-bottom) env(safe-area-inset-left)`,
+        `env(safe-area-inset-bottom) env(safe-area-inset-left);` +
+        `font-family:${SYSTEM_FONT_STACK}`,
     };
 
     container.style.cssText = baseStyle.default;
@@ -100,7 +125,7 @@
       isIOS,
     };
 
-    const iframeHtml = generator(
+    let iframeHtml = generator(
       Object.assign({}, ctxBase, { isStandalone: false })
     );
 
@@ -111,6 +136,12 @@
       );
     }
 
+    // Tự động inject system font CSS vào HTML iframe và standalone
+    iframeHtml = injectSystemFontCss(iframeHtml);
+    if (standaloneHtml) {
+      standaloneHtml = injectSystemFontCss(standaloneHtml);
+    }
+
     if (!iframeHtml) return;
 
     // ------------------------------------------------------------
@@ -119,8 +150,10 @@
     let iosStandaloneUrl = '';
     if (isIOS && standaloneHtml) {
       try {
-        const blob = new Blob([standaloneHtml], { type: 'text/html' });
-        iosStandaloneUrl = URL.createObjectURL(blob);
+        const blobStandalone = new Blob([standaloneHtml], {
+          type: 'text/html',
+        });
+        iosStandaloneUrl = URL.createObjectURL(blobStandalone);
       } catch (e) {
         console.error('PiaiEmbed: standalone blob error', e);
       }
