@@ -263,8 +263,11 @@ html, body {
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
+  overflow-x: hidden;  /* FIX: Ẩn scroll ngang */
   padding-right: 4px;
   list-style: none;
+  width: 100%;  /* FIX: Đảm bảo full width */
+  min-width: 0;  /* FIX: Cho phép shrink */
 }
 
 .piai-list-item {
@@ -278,6 +281,8 @@ html, body {
   transition: var(--piai-transition);
   font-size: var(--piai-fs-sm);
   color: var(--piai-text);
+  min-width: 0;  /* FIX: Cho phép flex shrink */
+  width: 100%;  /* FIX: Take full width */
 }
 .piai-list-item:hover {
   transform: translateX(4px);
@@ -289,15 +294,30 @@ html, body {
   color: var(--piai-accent);
   margin-top: 2px;
   transition: var(--piai-transition);
+  flex-shrink: 0;  /* FIX: Icon không bị shrink */
 }
 .piai-list-item:hover .piai-ico {
   color: var(--piai-primary);
   transform: scale(1.15) rotate(8deg);
 }
 
-.piai-list-item-content { flex: 1; min-width: 0; }
-.piai-list-item-title { font-weight: 600; margin-bottom: 2px; color: var(--piai-text); }
-.piai-list-item-desc { color: var(--piai-text-light); line-height: 1.4; }
+.piai-list-item-content { 
+  flex: 1; 
+  min-width: 0;  /* FIX: Cho phép text wrap */
+  word-wrap: break-word;  /* FIX: Break long words */
+  overflow-wrap: break-word;  /* FIX: Modern browsers */
+}
+.piai-list-item-title { 
+  font-weight: 600; 
+  margin-bottom: 2px; 
+  color: var(--piai-text);
+  word-wrap: break-word;  /* FIX */
+}
+.piai-list-item-desc { 
+  color: var(--piai-text-light); 
+  line-height: 1.4;
+  word-wrap: break-word;  /* FIX */
+}
 
 /* ═══════════════════════════════════════════════════════════════
    ICON (.piai-ico)
