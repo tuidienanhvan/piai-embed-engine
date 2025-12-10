@@ -227,7 +227,7 @@ body{
   transform:scale(1.1);
 }
 .hdr-btn svg{width:22px;height:22px}
-.theme-btn{right:48px}
+.theme-btn{right:24px}
 .fs-btn{right:0}
 /* Loader */
 .piai-loader{
