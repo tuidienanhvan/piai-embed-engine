@@ -161,6 +161,7 @@ body{
   flex-direction:column;
   overflow-y:auto;
   list-style:none;
+  padding-left:6px;
   padding-right:4px;
 }
 .piai-list-item{
