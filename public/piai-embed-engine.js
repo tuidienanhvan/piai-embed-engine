@@ -249,12 +249,11 @@ body{
 .piai-loader{
   position:absolute;
   inset:0;
-  /* nền mờ nhẹ, không che hoàn toàn theme phía sau */
-  background:rgba(0,0,0,0.03);
+  background:var(--piai-primary);
   display:flex;
   align-items:center;
   justify-content:center;
-  z-index:1000; /* cao hơn hdr-btn (999) để che luôn nút fullscreen */
+  z-index:1000; 
   backdrop-filter:blur(2px);
   transition:opacity 0.3s ease, visibility 0.3s ease;
 }
