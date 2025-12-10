@@ -28,16 +28,16 @@
       text: '#212121',
       textLight: '#757575',
     },
-    night: {
-      name: 'night',
-      primary: '#A1C2BD',
-      accent: '#A8A4CE',
-      secondary: '#697565',
-      bg: '#19183B',
-      text: '#E7F2EF',
-      textLight: '#9BA4B5',
+  night: {
+    name: 'night',
+    primary: '#A1C2BD',
+    accent: '#1D24CA',
+    secondary: '#A8A1CE',
+    bg: '#19183B',
+    text: '#E7F2EF',
+    textLight: '#9BA4B5',
   },
-  };
+};
 
   // Thứ tự theme: classic -> educational -> night -> classic...
   const THEME_ORDER = ['classic', 'educational', 'night'];
