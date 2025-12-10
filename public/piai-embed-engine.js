@@ -9,35 +9,35 @@
   // ============================================================
   // 1. THEMES, DEFAULTS & FONT STACK
   // ============================================================
-  const THEMES = {
-    classic: {
-      name: 'classic',
-      primary: '#800020',
-      accent: '#b8860b',
-      secondary: '#002b5c',
-      bg: '#f9f7f5',
-      text: '#1a1a1a',
-      textLight: '#666666',
-    },
-    educational: {
-      name: 'educational',
-      primary: '#2196F3',
-      accent: '#FFC107',
-      secondary: '#4CAF50',
-      bg: '#FFFFFF',
-      text: '#212121',
-      textLight: '#757575',
-    },
-    night: {
-      name: 'night',
-      primary: '#9BA4B5',
-      accent: '#394867',
-      secondary: '#F1F6F9',
-      bg: '#212A3E',
-      text: '#F1F6F9',
-      textLight: '#9BA4B5',
-    },
-  };
+const THEMES = {
+  classic: {
+    name: 'classic',
+    primary: '#800020',
+    accent: '#b8860b',
+    secondary: '#002b5c',
+    bg: '#f9f7f5',
+    text: '#002b4a',
+    textLight: '#666666',
+  },
+  educational: {
+    name: 'educational',
+    primary: '#2196F3',
+    accent: '#FFC107',
+    secondary: '#4CAF50',
+    bg: '#FFFFFF',
+    text: '#212121',
+    textLight: '#757575',
+  },
+  night: {
+    name: 'night',
+    primary: '#A1C2BD',
+    accent: '#394867',
+    secondary: '#708993',
+    bg: '#19183B',
+    text: '#E7F2EF',
+    textLight: '#9BA4B5',
+  },
+};
 
   const DEFAULT_CONFIG = {
     width: 800,
