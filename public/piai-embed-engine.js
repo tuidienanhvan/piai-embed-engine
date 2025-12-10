@@ -28,14 +28,14 @@
       text: '#212121',
       textLight: '#757575',
     },
-  night: {
-    name: 'night',
-    primary: '#A1C2BD',
-    accent: '#1D24CA',
-    secondary: '#A8A1CE',
-    bg: '#19183B',
-    text: '#E7F2EF',
-    textLight: '#9BA4B5',
+    night: {
+      name: 'night',
+      primary: '#A1C2BD',
+      accent: '#1D24CA',
+      secondary: '#A8A1CE',
+      bg: '#19183B',
+      text: '#F9E8C9',
+      textLight: '#9BA4B5',
   },
 };
 
