@@ -31,12 +31,12 @@
     night: {
       name: 'night',
       primary: '#A1C2BD',
-      accent: '#394867',
-      secondary: '#708993',
+      accent: '#3B1C32',
+      secondary: '#3C3D37',
       bg: '#19183B',
       text: '#E7F2EF',
       textLight: '#9BA4B5',
-    },
+  },
   };
 
   // Thứ tự theme: classic -> educational -> night -> classic...
