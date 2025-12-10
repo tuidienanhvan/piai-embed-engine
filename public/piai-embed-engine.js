@@ -1,5 +1,5 @@
 // piai-embed-engine.js
-// Phiên bản 2025 v3 – Theme & CSS centralized + system font stack
+// Phiên bản 2025 v3.1 – Theme & CSS centralized + system font stack
 // Giữ nguyên: fullscreen desktop, iOS standalone (mở trang mới), scale mượt, không memory leak
 // API: PiaiEmbed.render({ id, container, width, height, aspect, themeName, theme, html, htmlGenerator, headExtra })
 
@@ -9,35 +9,38 @@
   // ============================================================
   // 1. THEMES, DEFAULTS & FONT STACK
   // ============================================================
-const THEMES = {
-  classic: {
-    name: 'classic',
-    primary: '#800020',
-    accent: '#b8860b',
-    secondary: '#002b5c',
-    bg: '#f9f7f5',
-    text: '#002b4a',
-    textLight: '#666666',
-  },
-  educational: {
-    name: 'educational',
-    primary: '#2196F3',
-    accent: '#FFC107',
-    secondary: '#4CAF50',
-    bg: '#FFFFFF',
-    text: '#212121',
-    textLight: '#757575',
-  },
-  night: {
-    name: 'night',
-    primary: '#A1C2BD',
-    accent: '#394867',
-    secondary: '#708993',
-    bg: '#19183B',
-    text: '#E7F2EF',
-    textLight: '#9BA4B5',
-  },
-};
+  const THEMES = {
+    classic: {
+      name: 'classic',
+      primary: '#800020',
+      accent: '#b8860b',
+      secondary: '#002b5c',
+      bg: '#f9f7f5',
+      text: '#002b4a',
+      textLight: '#666666',
+    },
+    educational: {
+      name: 'educational',
+      primary: '#2196F3',
+      accent: '#FFC107',
+      secondary: '#4CAF50',
+      bg: '#FFFFFF',
+      text: '#212121',
+      textLight: '#757575',
+    },
+    night: {
+      name: 'night',
+      primary: '#A1C2BD',
+      accent: '#394867',
+      secondary: '#708993',
+      bg: '#19183B',
+      text: '#E7F2EF',
+      textLight: '#9BA4B5',
+    },
+  };
+
+  // Thứ tự theme: classic -> educational -> night -> classic...
+  const THEME_ORDER = ['classic', 'educational', 'night'];
 
   const DEFAULT_CONFIG = {
     width: 800,
@@ -314,6 +317,26 @@ ${content}
 </html>`;
   }
 
+  // Tạo style container (default / fullscreen) từ theme
+  function createBaseStyle(theme, width, height, aspect) {
+    return {
+      default:
+        `width:${width}px;max-width:100%;height:${height}px;` +
+        `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
+        `position:relative;border-radius:${BASE_RADIUS}px;` +
+        `border:1px solid ${(theme.primary || '#800020')}26;` +
+        `box-shadow:0 10px 30px ${(theme.navy || theme.secondary || '#002b5c')}26;` +
+        `overflow:hidden;background:${theme.bg || '#f9f7f5'};aspect-ratio:${aspect}`,
+      fullscreen:
+        `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
+        `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
+        `box-shadow:none;display:flex;justify-content:center;align-items:center;` +
+        `overflow:hidden;` +
+        `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
+        `env(safe-area-inset-bottom) env(safe-area-inset-left)`,
+    };
+  }
+
   // ============================================================
   // 3. CORE RENDER FUNCTION
   // ============================================================
@@ -343,27 +366,15 @@ ${content}
     container.id = containerId;
 
     const { isIOS, isMobile } = detectDevice();
-    const theme = themeOverride || getThemeByName(themeName);
-    const baseCss = getBaseCss(theme);
+
+    // Theme hiện tại (single source of truth)
+    let currentTheme = themeOverride || getThemeByName(themeName);
+    let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
+
+    let baseCss = getBaseCss(currentTheme);
+    let baseStyle = createBaseStyle(currentTheme, width, height, aspect);
 
     // Style chính – giống bản sạch: có max-width, aspect-ratio, bg theo theme
-    const baseStyle = {
-      default:
-        `width:${width}px;max-width:100%;height:${height}px;` +
-        `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
-        `position:relative;border-radius:${BASE_RADIUS}px;` +
-        `border:1px solid ${(theme.primary || '#800020')}26;` +
-        `box-shadow:0 10px 30px ${(theme.navy || theme.secondary || '#002b5c')}26;` +
-        `overflow:hidden;background:${theme.bg || '#f9f7f5'};aspect-ratio:${aspect}`,
-      fullscreen:
-        `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
-        `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
-        `box-shadow:none;display:flex;justify-content:center;align-items:center;` +
-        `overflow:hidden;` +
-        `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
-        `env(safe-area-inset-bottom) env(safe-area-inset-left)`,
-    };
-
     container.style.cssText = baseStyle.default;
 
     const wrapper = document.createElement('div');
@@ -383,8 +394,8 @@ ${content}
       width,
       height,
       aspect,
-      theme,
-      themeName: theme.name,
+      theme: currentTheme,
+      themeName: currentThemeName,
       baseCss,
       isIOS,
     };
@@ -443,6 +454,20 @@ ${content}
       try {
         URL.revokeObjectURL(blobUrl);
       } catch (_) {}
+
+      // Gửi theme hiện tại xuống iframe (cho content nào có lắng nghe)
+      try {
+        iframe.contentWindow &&
+          iframe.contentWindow.postMessage(
+            {
+              type: 'piaiApplyTheme',
+              id: containerId,
+              themeName: currentThemeName,
+              theme: currentTheme,
+            },
+            '*'
+          );
+      } catch (_) {}
     };
 
     // ============================================================
@@ -500,11 +525,51 @@ ${content}
       } catch (_) {}
     };
 
+    // Đổi theme (engine side) + thông báo xuống iframe
+    const switchTheme = () => {
+      // chọn theme tiếp theo trong THEME_ORDER
+      let idx = THEME_ORDER.indexOf(currentThemeName);
+      if (idx < 0) idx = 0;
+      const nextName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
+      currentThemeName = nextName;
+      currentTheme = getThemeByName(nextName);
+
+      // update style container theo theme mới
+      baseCss = getBaseCss(currentTheme);
+      baseStyle = createBaseStyle(currentTheme, width, height, aspect);
+
+      if (isFull) {
+        container.style.cssText = baseStyle.fullscreen;
+      } else {
+        container.style.cssText = baseStyle.default;
+      }
+
+      // cập nhật shadow / borderRadius cho iframe (theo logic cũ)
+      iframe.style.boxShadow = isFull ? '0 0 60px rgba(0,0,0,.4)' : 'none';
+      iframe.style.borderRadius = isFull ? '0' : BASE_RADIUS + 'px';
+
+      // thông báo theme mới xuống iframe (content nào lắng nghe sẽ apply)
+      try {
+        iframe.contentWindow &&
+          iframe.contentWindow.postMessage(
+            {
+              type: 'piaiApplyTheme',
+              id: containerId,
+              themeName: currentThemeName,
+              theme: currentTheme,
+            },
+            '*'
+          );
+      } catch (_) {}
+    };
+
     // ============================================================
     // 5. EVENTS
     // ============================================================
     const onMessage = (e) => {
       if (!e.data || e.data.id !== containerId) return;
+
+      // toggleFullscreen: logic cũ giữ nguyên
       if (e.data.type === 'toggleFullscreen') {
         // iOS: KHÔNG giả lập fullscreen CSS
         // logic mở tab mới nằm trong script bên trong iframe,
@@ -527,6 +592,13 @@ ${content}
         } else {
           setFullscreen(true);
         }
+        return;
+      }
+
+      // switchTheme: mới – iframe chỉ cần gửi { type:'switchTheme', id }
+      if (e.data.type === 'switchTheme') {
+        switchTheme();
+        return;
       }
     };
 
