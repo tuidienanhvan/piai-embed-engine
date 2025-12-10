@@ -31,8 +31,8 @@
     night: {
       name: 'night',
       primary: '#A1C2BD',
-      accent: '#3B1C32',
-      secondary: '#3C3D37',
+      accent: '#A8A4CE',
+      secondary: '#697565',
       bg: '#19183B',
       text: '#E7F2EF',
       textLight: '#9BA4B5',
