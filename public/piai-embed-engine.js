@@ -245,45 +245,52 @@ body{
 .hdr-btn svg{width:22px;height:22px}
 .theme-btn{right:24px}
 .fs-btn{right:0}
-/* Loader */
-.piai-loader{
-  position:absolute;
-  inset:0;
-  background:var(--piai-primary);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:1000; 
-  backdrop-filter:blur(2px);
-  transition:opacity 0.3s ease, visibility 0.3s ease;
+.piai-loader {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2); /* Nền tối nhẹ */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
-.piai-loader.hide{
-  opacity:0;
-  visibility:hidden;
-  pointer-events:none;
+
+.piai-loader.hide {
+  opacity: 0;
+  visibility: hidden;
 }
-.piai-loader .loader-inner{
-  min-width:160px;
-  padding:10px 16px;
-  border-radius:999px;
-  background:var(--piai-bg);
-  border:1px solid var(--piai-text-light);
-  box-shadow:0 6px 18px rgba(0,0,0,0.08);
-  display:flex;
-  align-items:center;
-  gap:10px;
+
+.piai-loader .loader-inner {
+  padding: 14px 28px;
+  border-radius: 30px;
+  /* Hiệu ứng kính */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5); /* Viền sáng nhẹ */
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.spinner{
-  width:22px;
-  height:22px;
-  border:3px solid var(--piai-text-light);
-  border-top-color:var(--piai-primary);
-  border-radius:50%;
-  animation:spin 0.8s linear infinite;
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  /* Dùng mask để tạo spinner gradient hoặc đơn giản hóa */
+  border: 3px solid transparent;
+  border-top-color: var(--piai-primary, #007bff);
+  border-right-color: var(--piai-primary, #007bff);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
-.loader-text{
-  font-size:0.85rem;
-  color:var(--piai-text-light);
+
+.loader-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 /* Responsive */
