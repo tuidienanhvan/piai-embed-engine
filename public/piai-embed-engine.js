@@ -1,7 +1,12 @@
 // piai-embed-engine.js
-// Phiên bản 2025 v3.1 – Theme & CSS centralized + system font stack
-// Giữ nguyên: fullscreen desktop, iOS standalone (mở trang mới), scale mượt, không memory leak
-// API: PiaiEmbed.render({ id, container, width, height, aspect, themeName, theme, html, htmlGenerator, headExtra })
+// Phiên bản 2025 v3.2 – Theme & CSS centralized + system font stack + loader UX
+// Giữ nguyên: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
+// API: PiaiEmbed.render({
+//   id, container, width, height, aspect,
+//   themeName, theme, html, htmlGenerator, headExtra,
+//   onReady?: (iframe, ctx) => void,
+//   onThemeChange?: (themeName, themeObj) => void
+// })
 
 (function (global) {
   'use strict';
@@ -99,6 +104,7 @@ body{
   display:flex;
   flex-direction:column;
   overflow:hidden;
+  position:relative;        /* ĐỂ LOADER ABSOLUTE BÁM THEO KHUNG EMBED */
 }
 /* Transition màu để đổi theme mượt hơn */
 .piai-wrap,
@@ -245,6 +251,8 @@ body{
 .hdr-btn svg{width:22px;height:22px}
 .theme-btn{right:24px}
 .fs-btn{right:0}
+
+/* Loader overlay bên trong iframe (do content điều khiển) */
 .piai-loader {
   position: absolute;
   inset: 0;
@@ -254,6 +262,7 @@ body{
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
@@ -279,7 +288,6 @@ body{
 .spinner {
   width: 24px;
   height: 24px;
-  /* Dùng mask để tạo spinner gradient hoặc đơn giản hóa */
   border: 3px solid transparent;
   border-top-color: var(--piai-primary, #007bff);
   border-right-color: var(--piai-primary, #007bff);
@@ -292,7 +300,9 @@ body{
   font-weight: 600;
   color: #333;
 }
+
 @keyframes spin{to{transform:rotate(360deg)}}
+
 /* Responsive */
 @media (max-width:650px){
   .piai-grid{flex-direction:column}
@@ -389,6 +399,9 @@ ${content}
       html,
       htmlGenerator,
       headExtra,
+      // v3.2 – optional callbacks, không ảnh hưởng logic cũ nếu không dùng
+      onReady,
+      onThemeChange,
     } = config;
 
     const container =
@@ -401,7 +414,9 @@ ${content}
       container.id || (typeof id === 'string' ? id : 'piai_' + Date.now());
     container.id = containerId;
 
-    const { isIOS, isMobile } = detectDevice();
+    const deviceInfo = detectDevice();
+    const isIOS = deviceInfo.isIOS;
+    const isMobile = deviceInfo.isMobile;
 
     // Theme hiện tại (single source of truth)
     let currentTheme = themeOverride || getThemeByName(themeName);
@@ -493,7 +508,7 @@ ${content}
 
       // Gửi theme hiện tại xuống iframe (cho content nào có lắng nghe)
       try {
-        iframe.contentWindow &&
+        if (iframe.contentWindow) {
           iframe.contentWindow.postMessage(
             {
               type: 'piaiApplyTheme',
@@ -503,7 +518,22 @@ ${content}
             },
             '*'
           );
+        }
       } catch (_) {}
+
+      // v3.2 – callback onReady (không bắt buộc)
+      if (typeof onReady === 'function') {
+        try {
+          onReady(iframe, {
+            id: containerId,
+            themeName: currentThemeName,
+            theme: currentTheme,
+          });
+        } catch (err) {
+          // nuốt lỗi callback để không phá engine
+          console.error('PiaiEmbed onReady callback error:', err);
+        }
+      }
     };
 
     // ============================================================
@@ -553,11 +583,12 @@ ${content}
 
       updateScale();
       try {
-        iframe.contentWindow &&
+        if (iframe.contentWindow) {
           iframe.contentWindow.postMessage(
             { type: 'fullscreenState', id: containerId, isFullscreen: state },
             '*'
           );
+        }
       } catch (_) {}
     };
 
@@ -589,7 +620,7 @@ ${content}
 
       // thông báo theme mới xuống iframe (content nào lắng nghe sẽ apply)
       try {
-        iframe.contentWindow &&
+        if (iframe.contentWindow) {
           iframe.contentWindow.postMessage(
             {
               type: 'piaiApplyTheme',
@@ -599,7 +630,17 @@ ${content}
             },
             '*'
           );
+        }
       } catch (_) {}
+
+      // v3.2 – callback onThemeChange (tuỳ chọn)
+      if (typeof onThemeChange === 'function') {
+        try {
+          onThemeChange(currentThemeName, currentTheme);
+        } catch (err) {
+          console.error('PiaiEmbed onThemeChange callback error:', err);
+        }
+      }
     };
 
     // ============================================================
@@ -611,9 +652,7 @@ ${content}
       // toggleFullscreen: logic cũ giữ nguyên
       if (e.data.type === 'toggleFullscreen') {
         // iOS: KHÔNG giả lập fullscreen CSS
-        // logic mở tab mới nằm trong script bên trong iframe,
-        // đọc window.frameElement.dataset.iosStandaloneUrl
-        if (detectDevice().isIOS) return;
+        if (isIOS) return;
 
         if (document.fullscreenElement) {
           document.exitFullscreen();
@@ -639,10 +678,13 @@ ${content}
         switchTheme();
         return;
       }
+
+      // (Mở rộng tương lai) iframe có thể gửi các message khác nếu cần
+      // ví dụ: piaiOuterLoaderDone, piaiResizeHeight, ...
     };
 
     const onFullscreenChange = () => {
-      if (detectDevice().isIOS) return;
+      if (isIOS) return;
       if (document.fullscreenElement === container) {
         setFullscreen(true);
       } else if (isFull && !document.fullscreenElement) {
