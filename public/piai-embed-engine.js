@@ -36,8 +36,8 @@
       bg: '#19183B',
       text: '#F9E8C9',
       textLight: '#9BA4B5',
-  },
-};
+    },
+  };
 
   // Thứ tự theme: classic -> educational -> night -> classic...
   const THEME_ORDER = ['classic', 'educational', 'night'];
@@ -99,6 +99,18 @@ body{
   display:flex;
   flex-direction:column;
   overflow:hidden;
+}
+/* Transition màu để đổi theme mượt hơn */
+.piai-wrap,
+.piai-hdr,
+.piai-def,
+.piai-list-item,
+.piai-body{
+  transition:
+    background-color .25s ease,
+    color .25s ease,
+    border-color .25s ease,
+    box-shadow .25s ease;
 }
 .piai-hdr{
   background:var(--piai-primary);
@@ -548,6 +560,9 @@ ${content}
       iframe.style.boxShadow = isFull ? '0 0 60px rgba(0,0,0,.4)' : 'none';
       iframe.style.borderRadius = isFull ? '0' : BASE_RADIUS + 'px';
 
+      // đảm bảo fullscreen scale vẫn đúng sau khi đổi theme
+      updateScale();
+
       // thông báo theme mới xuống iframe (content nào lắng nghe sẽ apply)
       try {
         iframe.contentWindow &&
@@ -595,7 +610,7 @@ ${content}
         return;
       }
 
-      // switchTheme: mới – iframe chỉ cần gửi { type:'switchTheme', id }
+      // switchTheme: iframe chỉ cần gửi { type:'switchTheme', id }
       if (e.data.type === 'switchTheme') {
         switchTheme();
         return;
