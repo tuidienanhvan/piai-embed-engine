@@ -249,24 +249,42 @@ body{
 .piai-loader{
   position:absolute;
   inset:0;
-  background:var(--piai-bg);
+  /* nền mờ nhẹ, không che hoàn toàn theme phía sau */
+  background:rgba(0,0,0,0.03);
   display:flex;
   align-items:center;
   justify-content:center;
-  z-index:100;
-  transition:opacity 0.3s;
+  z-index:1000; /* cao hơn hdr-btn (999) để che luôn nút fullscreen */
+  backdrop-filter:blur(2px);
+  transition:opacity 0.3s ease, visibility 0.3s ease;
 }
 .piai-loader.hide{
   opacity:0;
+  visibility:hidden;
   pointer-events:none;
 }
+.piai-loader .loader-inner{
+  min-width:160px;
+  padding:10px 16px;
+  border-radius:999px;
+  background:var(--piai-bg);
+  border:1px solid var(--piai-text-light);
+  box-shadow:0 6px 18px rgba(0,0,0,0.08);
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
 .spinner{
-  width:32px;
-  height:32px;
+  width:22px;
+  height:22px;
   border:3px solid var(--piai-text-light);
   border-top-color:var(--piai-primary);
   border-radius:50%;
   animation:spin 0.8s linear infinite;
+}
+.loader-text{
+  font-size:0.85rem;
+  color:var(--piai-text-light);
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 /* Responsive */
