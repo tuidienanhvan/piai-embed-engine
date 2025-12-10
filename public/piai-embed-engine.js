@@ -1,5 +1,5 @@
 // piai-embed-engine.js
-// Phiên bản 2025 v2.1 - Night theme + Text colors + Bug fixes
+// Phiên bản 2025 v2.1 - Night theme + No gap property
 // Features: Event system, ResizeObserver, Theme switching, Accessibility
 // Themes: classic, educational, night
 
@@ -66,14 +66,14 @@
     '"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"';
 
   // ============================================================
-  // CSS BASE - Complete with all fixes
+  // CSS BASE - No gap, use margin instead
   // ============================================================
   
   const generateBaseCSS = (theme) => `
 /* ═══════════════════════════════════════════════════════════════
    PIAI EMBED BASE CSS v2.1
    Theme: ${theme.name || 'custom'}
-   Fixes: Overflow, Text colors, Hover direction
+   Fixes: No gap property, margin-based spacing
 ═══════════════════════════════════════════════════════════════ */
 
 :root {
@@ -164,15 +164,22 @@ html, body {
   background: var(--piai-primary);
   color: #fff;
   padding: var(--piai-space-sm) var(--piai-space-lg);
-  padding-right: 100px; /* Space for 2 buttons */
+  padding-right: 100px;
   font-weight: 700;
   font-size: var(--piai-fs-md);
   display: flex;
   align-items: center;
-  gap: 10px;
   border-bottom: 3px solid var(--piai-accent);
   flex-shrink: 0;
   position: relative;
+}
+
+.piai-hdr > * {
+  margin-right: 10px;
+}
+
+.piai-hdr > *:last-child {
+  margin-right: 0;
 }
 
 .piai-hdr svg, 
@@ -195,6 +202,14 @@ html, body {
   flex-direction: column;
 }
 
+.piai-body > * {
+  margin-bottom: 15px;
+}
+
+.piai-body > *:last-child {
+  margin-bottom: 0;
+}
+
 .piai-body::-webkit-scrollbar { 
   width: 6px; 
 }
@@ -215,7 +230,6 @@ html, body {
   background: var(--piai-bg);
   border-left: 5px solid var(--piai-primary);
   padding: var(--piai-space-sm) var(--piai-space-md);
-  margin-bottom: var(--piai-space-sm);
   box-shadow: var(--piai-shadow-sm);
   border-radius: 0 var(--piai-radius-md) var(--piai-radius-md) 0;
   transition: var(--piai-transition);
@@ -234,8 +248,15 @@ html, body {
   font-size: var(--piai-fs-base);
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-bottom: 6px;
+}
+
+.piai-def-title > * {
+  margin-right: 8px;
+}
+
+.piai-def-title > *:last-child {
+  margin-right: 0;
 }
 
 .piai-def-title svg, 
@@ -257,35 +278,59 @@ html, body {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   GRID LAYOUT
+   GRID LAYOUT - Using margin instead of gap
 ═══════════════════════════════════════════════════════════════ */
 .piai-grid {
   display: flex;
-  gap: var(--piai-space-lg);
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+
+.piai-grid > * {
+  margin-right: var(--piai-space-lg);
+}
+
+.piai-grid > *:last-child {
+  margin-right: 0;
 }
 
 .piai-grid.reverse { 
   flex-direction: row-reverse; 
 }
 
+.piai-grid.reverse > * {
+  margin-right: 0;
+  margin-left: var(--piai-space-lg);
+}
+
+.piai-grid.reverse > *:last-child {
+  margin-left: 0;
+}
+
 .piai-grid.vertical { 
   flex-direction: column; 
 }
 
+.piai-grid.vertical > * {
+  margin-right: 0;
+  margin-bottom: var(--piai-space-lg);
+}
+
+.piai-grid.vertical > *:last-child {
+  margin-bottom: 0;
+}
+
 /* ═══════════════════════════════════════════════════════════════
-   LIST - Fixed overflow & hover direction
+   LIST - Using margin instead of gap
 ═══════════════════════════════════════════════════════════════ */
 .piai-list {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 8px; /* Space for hover animation */
+  padding-right: 8px;
   list-style: none;
   width: 100%;
   min-width: 0;
@@ -294,7 +339,6 @@ html, body {
 .piai-list-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
   padding: var(--piai-space-sm) var(--piai-space-md);
   background: var(--piai-bg);
   border-radius: var(--piai-radius-md);
@@ -304,12 +348,25 @@ html, body {
   color: var(--piai-text);
   min-width: 0;
   width: 100%;
+  margin-bottom: 8px;
+}
+
+.piai-list-item:last-child {
+  margin-bottom: 0;
 }
 
 .piai-list-item:hover {
-  transform: translateX(-4px); /* FIX: Move LEFT instead of right */
+  transform: translateX(-4px);
   border-color: var(--piai-accent);
   box-shadow: 0 2px 8px var(--piai-accent-light);
+}
+
+.piai-list-item > * {
+  margin-right: 12px;
+}
+
+.piai-list-item > *:last-child {
+  margin-right: 0;
 }
 
 .piai-list-item .piai-ico {
@@ -459,8 +516,6 @@ mjx-container {
 .piai-mb-md { margin-bottom: var(--piai-space-md); }
 .piai-flex { display: flex; }
 .piai-flex-center { display: flex; align-items: center; justify-content: center; }
-.piai-gap-sm { gap: var(--piai-space-sm); }
-.piai-gap-md { gap: var(--piai-space-md); }
 
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE
@@ -468,6 +523,15 @@ mjx-container {
 @media (max-width: 650px) {
   .piai-grid { 
     flex-direction: column; 
+  }
+  
+  .piai-grid > * {
+    margin-right: 0;
+    margin-bottom: var(--piai-space-lg);
+  }
+  
+  .piai-grid > *:last-child {
+    margin-bottom: 0;
   }
   
   .piai-grid.reverse { 
