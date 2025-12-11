@@ -537,60 +537,51 @@ ${content}
     };
 
     // ============================================================
-    // 4. FULLSCREEN & SCALING
-    // ============================================================
-    let isFull = false;
-    let resizeRAF = null;
+// 4. FULLSCREEN & SCALING (Updated v3.2)
+// ============================================================
+let isFull = false;
+let resizeRAF = null;
 
-    const updateScale = () => {
-      if (isFull) {
-        // Giống bản sạch: fullscreen scale
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        let scaleFull = Math.min(vw / width, vh / height);
-        if (!Number.isFinite(scaleFull) || scaleFull <= 0) scaleFull = 1;
-        wrapper.style.transform = 'scale(' + scaleFull + ')';
-        container.style.height = vh + 'px';
-        return;
-      }
+const updateScale = () => {
+  const rect = container.getBoundingClientRect();
+  const availableWidth = rect.width || window.innerWidth;
+  const availableHeight = Math.max(window.innerHeight - rect.top - 24, 0);
 
-      if (!isMobile) {
-        // Desktop: giữ kích thước gốc
-        wrapper.style.transform = 'scale(1)';
-        container.style.height = height + 'px';
-        return;
-      }
+  let scale;
 
-      // Mobile: scale để full width mà không bé xíu
-      const rect = container.getBoundingClientRect();
-      const availableWidth = rect.width || window.innerWidth;
-      const availableHeight = Math.max(window.innerHeight - rect.top - 24, 0);
+  if (isFull) {
+    // Fullscreen: scale tối đa vừa viewport
+    scale = Math.min(window.innerWidth / width, window.innerHeight / height);
+  } else if (!isMobile) {
+    // Desktop: giữ gốc, nhưng scale nếu viewport bé hơn
+    scale = Math.min(availableWidth / width, availableHeight / height, 1);
+  } else {
+    // Mobile: scale full width, không vượt quá 1
+    scale = Math.min(availableWidth / width, availableHeight / height, 1);
+  }
 
-      let scale = availableWidth > 0 ? availableWidth / width : 1;
-      if (availableHeight > 0) scale = Math.min(scale, availableHeight / height);
-      scale = Math.min(scale, 1);
-      if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+  if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
-      wrapper.style.transform = 'scale(' + scale + ')';
-      container.style.height = height * scale + 'px';
-    };
+  wrapper.style.transform = `scale(${scale})`;
+  container.style.height = `${height * scale}px`;
+};
 
-    const setFullscreen = (state) => {
-      isFull = state;
-      container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-      iframe.style.boxShadow = state ? '0 0 60px rgba(0,0,0,.4)' : 'none';
-      iframe.style.borderRadius = state ? '0' : BASE_RADIUS + 'px';
+const setFullscreen = (state) => {
+  isFull = state;
+  container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
+  iframe.style.boxShadow = state ? '0 0 60px rgba(0,0,0,.4)' : 'none';
+  iframe.style.borderRadius = state ? '0' : BASE_RADIUS + 'px';
+  updateScale();
 
-      updateScale();
-      try {
-        if (iframe.contentWindow) {
-          iframe.contentWindow.postMessage(
-            { type: 'fullscreenState', id: containerId, isFullscreen: state },
-            '*'
-          );
-        }
-      } catch (_) {}
-    };
+  try {
+    if (iframe.contentWindow) {
+      iframe.contentWindow.postMessage(
+        { type: 'fullscreenState', id: containerId, isFullscreen: state },
+        '*'
+      );
+    }
+  } catch (_) {}
+};
 
     // Đổi theme (engine side) + thông báo xuống iframe
     const switchTheme = () => {
