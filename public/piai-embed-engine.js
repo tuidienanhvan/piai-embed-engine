@@ -1,7 +1,12 @@
 // piai-embed-engine.js
 // Phiên bản 2025 v3.2 – Theme & CSS centralized + system font stack + loader UX
-// FIX: Overflow issues with flex shrink + min-width:0
-// API: PiaiEmbed.render({ id, container, width, height, aspect, themeName, theme, html, htmlGenerator, headExtra })
+// Giữ nguyên: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
+// API: PiaiEmbed.render({
+//   id, container, width, height, aspect,
+//   themeName, theme, html, htmlGenerator, headExtra,
+//   onReady?: (iframe, ctx) => void,
+//   onThemeChange?: (themeName, themeObj) => void
+// })
 
 (function (global) {
   'use strict';
@@ -39,14 +44,15 @@
     },
   };
 
+  // Thứ tự theme: classic -> educational -> night -> classic...
   const THEME_ORDER = ['classic', 'educational', 'night'];
 
   const DEFAULT_CONFIG = {
     width: 800,
     height: 450,
     aspect: '16 / 9',
-    themeName: 'classic',
-    headExtra: '',
+    themeName: 'classic', // hoặc truyền theme object trực tiếp
+    headExtra: '',        // thêm script/meta/link vào <head> nếu cần
   };
 
   const SYSTEM_FONT_STACK =
@@ -54,6 +60,7 @@
     '"Helvetica Neue",Arial,"Noto Sans",sans-serif,' +
     '"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"';
 
+  // bo góc gốc, sẽ scale theo kích thước
   const BASE_RADIUS = 16;
 
   // ============================================================
@@ -70,7 +77,7 @@
     return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName];
   }
 
-  // Base CSS - FIX: Added min-width:0, flex shrink for overflow prevention
+  // Base CSS cho mọi embed – dùng class .piai-*
   function getBaseCss(theme) {
     return `
 :root{
@@ -97,10 +104,19 @@ body{
   display:flex;
   flex-direction:column;
   overflow:hidden;
-  position:relative;
+  position:relative;        /* ĐỂ LOADER ABSOLUTE BÁM THEO KHUNG EMBED */
 }
-.piai-wrap,.piai-hdr,.piai-def,.piai-list-item,.piai-body{
-  transition:background-color .25s ease,color .25s ease,border-color .25s ease,box-shadow .25s ease;
+/* Transition màu để đổi theme mượt hơn */
+.piai-wrap,
+.piai-hdr,
+.piai-def,
+.piai-list-item,
+.piai-body{
+  transition:
+    background-color .25s ease,
+    color .25s ease,
+    border-color .25s ease,
+    box-shadow .25s ease;
 }
 .piai-hdr{
   background:var(--piai-primary);
@@ -123,10 +139,8 @@ body{
   overflow-x:hidden;
   display:flex;
   flex-direction:column;
-  min-width:0;
-  max-width:100%;
 }
-.piai-body>*{margin-bottom:15px;min-width:0;max-width:100%}
+.piai-body>*{margin-bottom:15px}
 .piai-body>*:last-child{margin-bottom:0}
 .piai-body::-webkit-scrollbar{width:6px}
 .piai-body::-webkit-scrollbar-thumb{
@@ -159,20 +173,17 @@ body{
   display:flex;
   flex:1;
   min-height:0;
-  overflow:visible;
 }
-.piai-grid>*{flex:1;min-width:0;margin-right:20px}
+.piai-grid>*{margin-right:20px}
 .piai-grid>*:last-child{margin-right:0}
 .piai-list{
   flex:1;
   display:flex;
   flex-direction:column;
   overflow-y:auto;
-  overflow-x:hidden;
   list-style:none;
   padding-left:6px;
   padding-right:4px;
-  min-width:0;
 }
 .piai-list-item{
   display:flex;
@@ -205,23 +216,19 @@ body{
   flex:1;
   min-width:0;
   word-wrap:break-word;
-  overflow-wrap:break-word;
 }
 .piai-list-item strong{color:var(--piai-primary)}
 .piai-visual{
-  flex:0 1 280px;
+  flex:0 0 280px;
   display:flex;
   align-items:center;
   justify-content:center;
-  min-width:0;
-  max-width:100%;
 }
 .piai-visual svg{
   max-width:100%;
   max-height:100%;
-  width:auto;
-  height:auto;
 }
+/* Header buttons */
 .hdr-btn{
   position:absolute;
   top:0;
@@ -244,75 +251,86 @@ body{
 .hdr-btn svg{width:22px;height:22px}
 .theme-btn{right:24px}
 .fs-btn{right:0}
-.piai-loader{
-  position:absolute;
-  inset:0;
-  background:var(--piai-primary);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:1000;
-  backdrop-filter:blur(2px);
-  transition:opacity 0.3s ease,visibility 0.3s ease;
+
+/* Loader overlay bên trong iframe (do content điều khiển) */
+.piai-loader {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2); /* Nền tối nhẹ */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
-.piai-loader.hide{
-  opacity:0;
-  visibility:hidden;
-  pointer-events:none;
+
+.piai-loader.hide {
+  opacity: 0;
+  visibility: hidden;
 }
-.piai-loader .loader-inner{
-  min-width:160px;
-  padding:10px 16px;
-  border-radius:999px;
-  background:var(--piai-bg);
-  border:1px solid var(--piai-text-light);
-  box-shadow:0 6px 18px rgba(0,0,0,0.08);
-  display:flex;
-  align-items:center;
-  gap:10px;
+
+.piai-loader .loader-inner {
+  padding: 14px 28px;
+  border-radius: 30px;
+  /* Hiệu ứng kính */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5); /* Viền sáng nhẹ */
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.spinner{
-  width:22px;
-  height:22px;
-  border:3px solid var(--piai-text-light);
-  border-top-color:var(--piai-primary);
-  border-radius:50%;
-  animation:spin 0.8s linear infinite;
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid transparent;
+  border-top-color: var(--piai-primary, #007bff);
+  border-right-color: var(--piai-primary, #007bff);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
-.loader-text{
-  font-size:0.85rem;
-  color:var(--piai-text-light);
+
+.loader-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
 }
+
 @keyframes spin{to{transform:rotate(360deg)}}
-@media (max-width:800px){
-  .piai-visual{
-    flex:0 1 200px;
-    max-width:200px;
-  }
-  .piai-visual svg{
-    max-width:200px;
-  }
-}
+
+/* Responsive */
 @media (max-width:650px){
   .piai-grid{flex-direction:column}
-  .piai-grid>*{margin-right:0;margin-bottom:16px}
+  .piai-grid>*{
+    margin-right:0;
+    margin-bottom:16px;
+  }
   .piai-grid>*:last-child{margin-bottom:0}
   .piai-visual{
     flex:0 0 auto;
     padding:10px;
     width:100%;
-    max-width:100%;
   }
-  .piai-visual svg{
-    max-width:280px;
-    margin:0 auto;
+  .piai-hdr{
+    padding:10px 16px;
+    padding-right:100px;
   }
-  .piai-hdr{padding:10px 16px;padding-right:100px}
-  .piai-body{padding:12px 16px}
 }
 `;
   }
 
+  /**
+   * Nếu content đã là full HTML (có <!DOCTYPE html>), engine sẽ inject
+   *   - baseCss
+   *   - headExtra
+   * vào trước </head>.
+   * Nếu chỉ là fragment, engine wrap thành full document.
+   */
   function buildHtmlDocument(content, baseCss, headExtra) {
     if (!content) return '';
 
@@ -330,6 +348,7 @@ body{
       return content;
     }
 
+    // Fragment -> wrap
     return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -344,6 +363,7 @@ ${content}
 </html>`;
   }
 
+  // Tạo style container (default / fullscreen) từ theme
   function createBaseStyle(theme, width, height, aspect) {
     return {
       default:
@@ -351,7 +371,7 @@ ${content}
         `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
         `position:relative;border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${(theme.primary || '#800020')}26;` +
-        `box-shadow:0 10px 30px ${(theme.secondary || '#002b5c')}26;` +
+        `box-shadow:0 10px 30px ${(theme.navy || theme.secondary || '#002b5c')}26;` +
         `overflow:hidden;background:${theme.bg || '#f9f7f5'};aspect-ratio:${aspect}`,
       fullscreen:
         `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
@@ -379,6 +399,7 @@ ${content}
       html,
       htmlGenerator,
       headExtra,
+      // v3.2 – optional callbacks, không ảnh hưởng logic cũ nếu không dùng
       onReady,
       onThemeChange,
     } = config;
@@ -397,19 +418,24 @@ ${content}
     const isIOS = deviceInfo.isIOS;
     const isMobile = deviceInfo.isMobile;
 
+    // Theme hiện tại (single source of truth)
     let currentTheme = themeOverride || getThemeByName(themeName);
     let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
 
     let baseCss = getBaseCss(currentTheme);
     let baseStyle = createBaseStyle(currentTheme, width, height, aspect);
 
+    // Style chính – giống bản sạch: có max-width, aspect-ratio, bg theo theme
     container.style.cssText = baseStyle.default;
 
     const wrapper = document.createElement('div');
     wrapper.style.cssText =
-      `width:100%;max-width:${width}px;height:${height}px;position:relative;` +
-      `transform-origin:center;transition:transform .3s ease;flex-shrink:0;margin:0 auto`;
+      `width:${width}px;height:${height}px;position:relative;` +
+      `transform-origin:center;transition:transform .3s ease;flex-shrink:0`;
 
+    // ------------------------------------------------------------
+    // 3.1. Generate HTML (iframe + iOS standalone)
+    // ------------------------------------------------------------
     const generator =
       typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
 
@@ -456,6 +482,9 @@ ${content}
       }
     }
 
+    // ------------------------------------------------------------
+    // 3.2. Blob & iframe
+    // ------------------------------------------------------------
     const blob = new Blob([iframeHtml], { type: 'text/html' });
     const blobUrl = URL.createObjectURL(blob);
 
@@ -468,8 +497,8 @@ ${content}
     iframe.scrolling = 'no';
     iframe.loading = 'lazy';
     iframe.sandbox =
-      'allow-scripts allow-same-origin allow-modals allow-popups';
-    iframe.allow = 'fullscreen';
+      'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
+    iframe.allow = 'fullscreen; clipboard-read; clipboard-write';
     if (iosStandaloneUrl) iframe.dataset.iosStandaloneUrl = iosStandaloneUrl;
 
     iframe.onload = function () {
@@ -477,6 +506,7 @@ ${content}
         URL.revokeObjectURL(blobUrl);
       } catch (_) {}
 
+      // Gửi theme hiện tại xuống iframe (cho content nào có lắng nghe)
       try {
         if (iframe.contentWindow) {
           iframe.contentWindow.postMessage(
@@ -491,6 +521,7 @@ ${content}
         }
       } catch (_) {}
 
+      // v3.2 – callback onReady (không bắt buộc)
       if (typeof onReady === 'function') {
         try {
           onReady(iframe, {
@@ -499,16 +530,21 @@ ${content}
             theme: currentTheme,
           });
         } catch (err) {
+          // nuốt lỗi callback để không phá engine
           console.error('PiaiEmbed onReady callback error:', err);
         }
       }
     };
 
+    // ============================================================
+    // 4. FULLSCREEN & SCALING
+    // ============================================================
     let isFull = false;
     let resizeRAF = null;
 
     const updateScale = () => {
       if (isFull) {
+        // Giống bản sạch: fullscreen scale
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         let scaleFull = Math.min(vw / width, vh / height);
@@ -519,11 +555,13 @@ ${content}
       }
 
       if (!isMobile) {
+        // Desktop: giữ kích thước gốc
         wrapper.style.transform = 'scale(1)';
         container.style.height = height + 'px';
         return;
       }
 
+      // Mobile: scale để full width mà không bé xíu
       const rect = container.getBoundingClientRect();
       const availableWidth = rect.width || window.innerWidth;
       const availableHeight = Math.max(window.innerHeight - rect.top - 24, 0);
@@ -554,13 +592,16 @@ ${content}
       } catch (_) {}
     };
 
+    // Đổi theme (engine side) + thông báo xuống iframe
     const switchTheme = () => {
+      // chọn theme tiếp theo trong THEME_ORDER
       let idx = THEME_ORDER.indexOf(currentThemeName);
       if (idx < 0) idx = 0;
       const nextName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
       currentThemeName = nextName;
       currentTheme = getThemeByName(nextName);
 
+      // update style container theo theme mới
       baseCss = getBaseCss(currentTheme);
       baseStyle = createBaseStyle(currentTheme, width, height, aspect);
 
@@ -570,11 +611,14 @@ ${content}
         container.style.cssText = baseStyle.default;
       }
 
+      // cập nhật shadow / borderRadius cho iframe (theo logic cũ)
       iframe.style.boxShadow = isFull ? '0 0 60px rgba(0,0,0,.4)' : 'none';
       iframe.style.borderRadius = isFull ? '0' : BASE_RADIUS + 'px';
 
+      // đảm bảo fullscreen scale vẫn đúng sau khi đổi theme
       updateScale();
 
+      // thông báo theme mới xuống iframe (content nào lắng nghe sẽ apply)
       try {
         if (iframe.contentWindow) {
           iframe.contentWindow.postMessage(
@@ -589,6 +633,7 @@ ${content}
         }
       } catch (_) {}
 
+      // v3.2 – callback onThemeChange (tuỳ chọn)
       if (typeof onThemeChange === 'function') {
         try {
           onThemeChange(currentThemeName, currentTheme);
@@ -598,10 +643,15 @@ ${content}
       }
     };
 
+    // ============================================================
+    // 5. EVENTS
+    // ============================================================
     const onMessage = (e) => {
       if (!e.data || e.data.id !== containerId) return;
 
+      // toggleFullscreen: logic cũ giữ nguyên
       if (e.data.type === 'toggleFullscreen') {
+        // iOS: KHÔNG giả lập fullscreen CSS
         if (isIOS) return;
 
         if (document.fullscreenElement) {
@@ -615,7 +665,7 @@ ${content}
               setFullscreen(true);
             })
             .catch(function () {
-              setFullscreen(true);
+              setFullscreen(true); // fallback CSS full nếu FS API fail
             });
         } else {
           setFullscreen(true);
@@ -623,10 +673,14 @@ ${content}
         return;
       }
 
+      // switchTheme: iframe chỉ cần gửi { type:'switchTheme', id }
       if (e.data.type === 'switchTheme') {
         switchTheme();
         return;
       }
+
+      // (Mở rộng tương lai) iframe có thể gửi các message khác nếu cần
+      // ví dụ: piaiOuterLoaderDone, piaiResizeHeight, ...
     };
 
     const onFullscreenChange = () => {
@@ -655,6 +709,7 @@ ${content}
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
 
+    // Cleanup khi element bị xóa
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
         for (const node of m.removedNodes) {
@@ -678,13 +733,14 @@ ${content}
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
+    // Mount
     wrapper.appendChild(iframe);
     container.appendChild(wrapper);
     updateScale();
   }
 
   // ============================================================
-  // 4. EXPORT
+  // 6. EXPORT
   // ============================================================
   const api = {
     render,
