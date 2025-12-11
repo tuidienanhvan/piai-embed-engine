@@ -365,27 +365,19 @@ ${content}
 
   // Tạo style container (default / fullscreen) từ theme
   function createBaseStyle(theme, width, height, aspect) {
-    // Padding-bottom trick: (height/width)*100% tạo aspect ratio hoàn hảo
-    // Ví dụ: 450/800 = 0.5625 = 56.25% cho 16:9
-    const aspectPercent = (height / width) * 100;
-    
     return {
       default:
-        `width:100%;max-width:${width}px;` +
-        `margin:20px auto;` +
-        `position:relative;` +
-        `padding-bottom:${aspectPercent}%;` + // KEY: Tạo aspect ratio
-        `height:0;` + // Reset height để padding-bottom hoạt động
-        `border-radius:${BASE_RADIUS}px;` +
+        `width:${width}px;max-width:100%;height:${height}px;` +
+        `margin:20px auto;display:flex;justify-content:center;align-items:center;` +
+        `position:relative;border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${(theme.primary || '#800020')}26;` +
         `box-shadow:0 10px 30px ${(theme.navy || theme.secondary || '#002b5c')}26;` +
-        `overflow:hidden;background:${theme.bg || '#f9f7f5'};` +
-        `transition:all 0.3s ease`,
+        `overflow:hidden;background:${theme.bg || '#f9f7f5'};aspect-ratio:${aspect}`,
       fullscreen:
         `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
-        `margin:0;padding:0;border-radius:0;z-index:99999;background:#000;` +
-        `border:none;box-shadow:none;overflow:hidden;` +
-        `display:flex;justify-content:center;align-items:center;` +
+        `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
+        `box-shadow:none;display:flex;justify-content:center;align-items:center;` +
+        `overflow:hidden;` +
         `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
         `env(safe-area-inset-bottom) env(safe-area-inset-left)`,
     };
@@ -433,14 +425,13 @@ ${content}
     let baseCss = getBaseCss(currentTheme);
     let baseStyle = createBaseStyle(currentTheme, width, height, aspect);
 
-    // Style chính – container tự điều chỉnh theo aspect-ratio
+    // Style chính – giống bản sạch: có max-width, aspect-ratio, bg theo theme
     container.style.cssText = baseStyle.default;
 
     const wrapper = document.createElement('div');
     wrapper.style.cssText =
-      `position:absolute;top:0;left:0;width:100%;height:100%;` +
-      `display:flex;align-items:center;justify-content:center;` +
-      `overflow:hidden`; // Prevent any overflow from scaled iframe
+      `width:${width}px;height:${height}px;position:relative;` +
+      `transform-origin:center;transition:transform .3s ease;flex-shrink:0`;
 
     // ------------------------------------------------------------
     // 3.1. Generate HTML (iframe + iOS standalone)
@@ -553,58 +544,44 @@ ${content}
 
     const updateScale = () => {
       if (isFull) {
-        // Fullscreen: scale iframe to fit viewport while maintaining aspect ratio
+        // Giống bản sạch: fullscreen scale
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const scaleW = vw / width;
-        const scaleH = vh / height;
-        const scaleFull = Math.min(scaleW, scaleH, 1);
-        
-        iframe.style.width = width + 'px';
-        iframe.style.height = height + 'px';
-        iframe.style.transform = 'scale(' + scaleFull + ')';
-        iframe.style.transformOrigin = 'center';
+        let scaleFull = Math.min(vw / width, vh / height);
+        if (!Number.isFinite(scaleFull) || scaleFull <= 0) scaleFull = 1;
+        wrapper.style.transform = 'scale(' + scaleFull + ')';
+        container.style.height = vh + 'px';
         return;
       }
 
-      // Normal mode: Always keep iframe at original size (800×450)
-      // and scale it to fit container
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width || container.offsetWidth;
-      
-      const scale = Math.min(containerWidth / width, 1);
-      
-      // Set iframe to original dimensions
-      iframe.style.width = width + 'px';
-      iframe.style.height = height + 'px';
-      
-      // Scale iframe
-      iframe.style.transform = 'scale(' + scale + ')';
-      iframe.style.transformOrigin = 'center center';
+      if (!isMobile) {
+        // Desktop: giữ kích thước gốc
+        wrapper.style.transform = 'scale(1)';
+        container.style.height = height + 'px';
+        return;
+      }
+
+      // Mobile: scale để full width mà không bé xíu
+      const rect = container.getBoundingClientRect();
+      const availableWidth = rect.width || window.innerWidth;
+      const availableHeight = Math.max(window.innerHeight - rect.top - 24, 0);
+
+      let scale = availableWidth > 0 ? availableWidth / width : 1;
+      if (availableHeight > 0) scale = Math.min(scale, availableHeight / height);
+      scale = Math.min(scale, 1);
+      if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+
+      wrapper.style.transform = 'scale(' + scale + ')';
+      container.style.height = height * scale + 'px';
     };
 
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-      
-      if (state) {
-        // Fullscreen: container flex, wrapper relative for centering scaled iframe
-        wrapper.style.cssText = 
-          `position:relative;display:flex;align-items:center;justify-content:center;` +
-          `width:100%;height:100%`;
-        iframe.style.boxShadow = '0 0 60px rgba(0,0,0,.4)';
-        iframe.style.borderRadius = '0';
-      } else {
-        // Normal: wrapper absolute inside padding-bottom container
-        wrapper.style.cssText =
-          `position:absolute;top:0;left:0;width:100%;height:100%;` +
-          `display:flex;align-items:center;justify-content:center`;
-        iframe.style.boxShadow = 'none';
-        iframe.style.borderRadius = BASE_RADIUS + 'px';
-      }
+      iframe.style.boxShadow = state ? '0 0 60px rgba(0,0,0,.4)' : 'none';
+      iframe.style.borderRadius = state ? '0' : BASE_RADIUS + 'px';
 
       updateScale();
-      
       try {
         if (iframe.contentWindow) {
           iframe.contentWindow.postMessage(
@@ -628,8 +605,18 @@ ${content}
       baseCss = getBaseCss(currentTheme);
       baseStyle = createBaseStyle(currentTheme, width, height, aspect);
 
-      // Apply style dựa trên state hiện tại (giống setFullscreen)
-      setFullscreen(isFull);
+      if (isFull) {
+        container.style.cssText = baseStyle.fullscreen;
+      } else {
+        container.style.cssText = baseStyle.default;
+      }
+
+      // cập nhật shadow / borderRadius cho iframe (theo logic cũ)
+      iframe.style.boxShadow = isFull ? '0 0 60px rgba(0,0,0,.4)' : 'none';
+      iframe.style.borderRadius = isFull ? '0' : BASE_RADIUS + 'px';
+
+      // đảm bảo fullscreen scale vẫn đúng sau khi đổi theme
+      updateScale();
 
       // thông báo theme mới xuống iframe (content nào lắng nghe sẽ apply)
       try {
