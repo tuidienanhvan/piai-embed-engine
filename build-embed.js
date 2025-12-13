@@ -22,16 +22,11 @@ const OUT_OBF = path.join(__dirname, 'public', 'piai-embed-engine.obf.js');
   const min = await minify(code, {
     compress: {
       passes: 2,
-      // nếu muốn giữ console.error/log cho debug thì để false
       drop_console: false,
-      drop_debugger: true
+      drop_debugger: true,
     },
-    mangle: {
-      toplevel: true
-    },
-    format: {
-      comments: false
-    }
+    mangle: { toplevel: true },
+    format: { comments: false },
   });
 
   if (!min || !min.code) {
@@ -42,30 +37,21 @@ const OUT_OBF = path.join(__dirname, 'public', 'piai-embed-engine.obf.js');
   fs.writeFileSync(OUT_MIN, min.code, 'utf8');
   console.log('✅ Wrote:', OUT_MIN);
 
-  // 2) OBFUSCATE (obf trên bản min cho gọn + khó đọc)
+  // 2) OBFUSCATE (trên bản min)
   const obf = JavaScriptObfuscator.obfuscate(min.code, {
     compact: true,
-
-    // đừng bật quá nặng kẻo chậm / nặng file
     controlFlowFlattening: true,
     controlFlowFlatteningThreshold: 0.2,
-
     deadCodeInjection: true,
     deadCodeInjectionThreshold: 0.05,
-
     stringArray: true,
     stringArrayThreshold: 0.7,
     splitStrings: true,
     splitStringsChunkLength: 10,
-
     numbersToExpressions: true,
     simplify: true,
-
-    // tránh đổi global để giảm rủi ro vỡ API window.PiaiEmbed
     renameGlobals: false,
-
-    // chống “copy/paste chạy lại” – có thể gây lỗi nếu bị re-bundle
-    selfDefending: true
+    selfDefending: true,
   });
 
   fs.writeFileSync(OUT_OBF, obf.getObfuscatedCode(), 'utf8');
