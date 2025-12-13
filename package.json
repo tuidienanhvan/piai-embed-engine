@@ -1,0 +1,13 @@
+{
+    "name": "piai-embed-engine",
+    "private": true,
+    "version": "2025.3.2",
+    "scripts": {
+      "build": "node build-embed.js"
+    },
+    "devDependencies": {
+      "javascript-obfuscator": "^4.1.0",
+      "terser": "^5.31.6"
+    }
+  }
+  
