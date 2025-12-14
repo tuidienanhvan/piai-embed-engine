@@ -341,7 +341,7 @@ body{
   flex: 0 0 auto;
 }
 .ex-box > span:last-child{
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.25;
   min-width: 0;
   word-break: break-word;
