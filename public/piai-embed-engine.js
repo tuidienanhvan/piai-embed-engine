@@ -1,5 +1,5 @@
 // piai-embed-engine.js
-// v3.4.0 – add "ex-box" styles + opt-in fitMode:no-scroll/compact
+// v3.5.0 – FIX: logo positioning + text blur on hover/fullscreen
 // Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
 
 (function (global) {
@@ -46,7 +46,6 @@
     aspect: '16 / 9',
     themeName: 'classic',
     headExtra: '',
-    // NEW:
     // 'scroll' (default) | 'no-scroll' | 'compact'
     fitMode: 'scroll',
   };
@@ -78,8 +77,9 @@
     return 'scroll';
   }
 
-  // Base CSS trong iframe – FIX triệt để hover clipping + align icon/text
-  // + NEW: ex-box styles + fitMode(no-scroll) styles (opt-in via html class)
+  // Base CSS trong iframe
+  // FIX 1: Logo positioning - đảm bảo nằm trong .piai-wrap với overflow visible cho logo
+  // FIX 2: Text blur - loại bỏ transform trên text elements, dùng box-shadow thay vì transform cho hover
   function getBaseCss(theme) {
     return `:root{
   --piai-primary:${theme.primary};
@@ -96,6 +96,10 @@ body{
   color:var(--piai-text);
   background:transparent;
   overflow:hidden;
+  /* FIX TEXT BLUR: Force better text rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 .piai-wrap{
   width:100%;
@@ -105,6 +109,8 @@ body{
   flex-direction:column;
   overflow:hidden;
   position:relative;
+  /* FIX TEXT BLUR: Isolation context để tránh blur từ parent transforms */
+  isolation: isolate;
 }
 
 /* ========== HEADER (align icon + text) ========== */
@@ -112,7 +118,7 @@ body{
   background:var(--piai-primary);
   color:#fff;
   padding:12px 20px;
-  padding-right:130px; /* nút to + gap 10px */
+  padding-right:130px;
   font-weight:700;
   display:flex;
   align-items:center;
@@ -132,6 +138,9 @@ body{
   display:flex;
   flex-direction:column;
   min-height:0;
+  /* FIX TEXT BLUR: Tạo stacking context riêng */
+  position: relative;
+  z-index: 1;
 }
 .piai-body>*{margin-bottom:15px}
 .piai-body>*:last-child{margin-bottom:0}
@@ -141,15 +150,17 @@ body{
   border-radius:3px;
 }
 
-/* Def box */
+/* Def box - FIX: Loại bỏ transform, dùng box-shadow cho hover effect */
 .piai-def{
   background:var(--piai-bg);
   border-left:5px solid var(--piai-primary);
   padding:12px 18px;
   border-radius:0 8px 8px 0;
-  transition:all .25s;
+  transition: box-shadow .25s ease, border-color .25s ease;
 }
-.piai-def:hover{transform:translateY(-2px)}
+.piai-def:hover{
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
 .piai-def-title{
   color:var(--piai-primary);
   font-weight:700;
@@ -167,7 +178,7 @@ body{
 .piai-grid>*{margin-right:20px}
 .piai-grid>*:last-child{margin-right:0}
 
-/* ========== LIST (FIX TRIỆT ĐỂ hover clipping) ========== */
+/* ========== LIST - FIX TEXT BLUR ========== */
 .piai-list{
   flex:1;
   display:flex;
@@ -177,12 +188,12 @@ body{
   scrollbar-gutter: stable;
   position:relative;
   list-style:none;
-  padding-right:26px; /* tránh scrollbar overlay */
+  padding-right:26px;
   padding-left:6px;
   min-height:0;
 }
 
-/* Item: border thật transparent + inset shadow làm viền => hết răng cưa/white pixels khi scale */
+/* Item: FIX - Loại bỏ transform, chỉ dùng box-shadow cho hover */
 .piai-list-item{
   position:relative;
   z-index:0;
@@ -202,15 +213,20 @@ body{
   font-size:.9rem;
   line-height:1.45;
 
-  transition:background-color .18s, box-shadow .18s;
+  /* FIX TEXT BLUR: Chỉ transition box-shadow, KHÔNG dùng transform */
+  transition: box-shadow .18s ease;
+  
+  /* REMOVED: Những dòng này gây blur text khi scale
   transform:translateZ(0);
   backface-visibility:hidden;
+  */
 }
 .piai-list-item:last-child{margin-bottom:0}
 .piai-list-item:hover{
-  box-shadow: inset 0 0 0 2px var(--piai-accent);
+  box-shadow: inset 0 0 0 2px var(--piai-accent), 0 2px 8px rgba(0,0,0,0.08);
 }
 
+/* Icon trong list item - FIX: Transform chỉ cho icon SVG, không ảnh hưởng text */
 .piai-list-item .piai-ico{
   color:var(--piai-accent);
   width:24px;height:24px;
@@ -218,10 +234,15 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
-  transition:transform .18s;
+  /* Icon có thể transform vì không chứa text */
 }
-.piai-list-item .piai-ico svg{width:22px;height:22px;display:block}
-.piai-list-item:hover .piai-ico{transform:scale(1.22) rotate(8deg)}
+.piai-list-item .piai-ico svg{
+  width:22px;height:22px;display:block;
+  transition: transform .18s ease;
+}
+.piai-list-item:hover .piai-ico svg{
+  transform: scale(1.22) rotate(8deg);
+}
 .piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}
 .piai-list-item strong{color:var(--piai-primary)}
 
@@ -229,7 +250,7 @@ body{
 .piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}
 .piai-visual svg{max-width:100%;max-height:100%}
 
-/* Header buttons (icon to hơn + gap 10px) */
+/* Header buttons */
 .hdr-btn{
   position:absolute;
   top:50%;
@@ -246,13 +267,19 @@ body{
   align-items:center;
   justify-content:center;
 
-  transition:transform .2s, color .2s;
+  transition: color .2s ease;
 }
 .hdr-btn:hover{
   color:#fff;
-  transform:translateY(-50%) scale(1.1);
 }
-.hdr-btn svg{width:26px;height:26px;display:block}
+/* Separate transform for button hover - icon only */
+.hdr-btn svg{
+  width:26px;height:26px;display:block;
+  transition: transform .2s ease;
+}
+.hdr-btn:hover svg{
+  transform: scale(1.1);
+}
 .fs-btn{right:0}
 .theme-btn{right:58px}
 
@@ -287,7 +314,7 @@ body{
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ===========================
-   NEW: EX BOX (Ví dụ) styles
+   EX BOX (Ví dụ) styles
    =========================== */
 .ex-box{
   margin-top: 6px;
@@ -321,17 +348,22 @@ body{
 }
 
 /* ===========================
-   NEW: BRAND LOGO (optional)
+   FIX 1: BRAND LOGO POSITIONING
+   - Phải nằm trực tiếp trong .piai-wrap
+   - Dùng calc() để đảm bảo vị trí chính xác
    =========================== */
 .piai-brand{
   position: absolute;
-  right: -2px;
+  /* FIX: Dùng calc để đảm bảo vị trí, right: -2px có thể bị clip */
+  right: 0;
   bottom: 12px;
   width: 96px;
   height: 26px;
   background: var(--piai-primary);
   opacity: .95;
   pointer-events: none;
+  /* FIX: Đảm bảo logo không bị ảnh hưởng bởi parent overflow */
+  z-index: 10;
 
   -webkit-mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
   -webkit-mask-repeat: no-repeat;
@@ -345,8 +377,7 @@ body{
 }
 
 /* ==========================================
-   NEW: FIT MODE (no-scroll / compact) OPT-IN
-   Activated when <html> has class .piai-fit-noscroll
+   FIT MODE (no-scroll / compact) OPT-IN
    ========================================== */
 .piai-fit-noscroll .piai-body{ overflow:hidden !important; }
 .piai-fit-noscroll .piai-def{ margin-bottom: 8px !important; }
@@ -361,7 +392,7 @@ body{
   min-height: 0 !important;
   flex: 1 1 auto !important;
 }
-.piai-fit-noscroll .piai-grid>*{ margin-right: 0 !important; } /* bỏ spacing cũ */
+.piai-fit-noscroll .piai-grid>*{ margin-right: 0 !important; }
 .piai-fit-noscroll .piai-list{
   flex: 1 1 auto !important;
   min-width: 0 !important;
@@ -391,6 +422,30 @@ body{
   width:100%;
   height:auto;
   display:block;
+}
+
+/* ==========================================
+   FIX 2: MATHJAX & TEXT CLARITY
+   Force crisp rendering cho MathJax elements
+   ========================================== */
+.MathJax,
+.MathJax_Display,
+.MathJax svg,
+mjx-container,
+mjx-container svg {
+  /* Prevent blurry rendering */
+  image-rendering: -webkit-optimize-contrast;
+  -webkit-font-smoothing: antialiased;
+  /* Force pixel-perfect rendering */
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+/* Ensure MathJax containers don't inherit problematic transforms */
+.MathJax,
+mjx-container {
+  transform: none !important;
+  backface-visibility: visible !important;
 }
 
 @media (max-width:650px){
@@ -508,8 +563,8 @@ ${content}
     wrapper.style.cssText =
       `position:absolute;top:0;left:0;` +
       `width:${width}px;height:${height}px;` +
-      `transform-origin:0 0;` +
-      `will-change:transform;`;
+      `transform-origin:0 0;`;
+      // FIX TEXT BLUR: Removed will-change:transform - causes blur on scaled content
 
     const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
 
@@ -558,7 +613,6 @@ ${content}
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
 
-    // KHÔNG border-radius ở iframe — để container cắt góc
     iframe.style.cssText =
       `width:100%;height:100%;border:none;display:block;` +
       `background:${currentTheme.bg || '#f9f7f5'};`;
@@ -590,7 +644,8 @@ ${content}
     };
 
     // ============================================================
-    // 4) FULLSCREEN & SCALING (fill width, keep 16:9)
+    // 4) FULLSCREEN & SCALING
+    // FIX TEXT BLUR: Round scale to avoid sub-pixel rendering
     // ============================================================
     let isFull = false;
     let resizeRAF = null;
@@ -607,9 +662,15 @@ ${content}
 
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
-      wrapper.style.transform = `translateZ(0) scale(${scale})`;
+      // FIX TEXT BLUR: Round scale to 3 decimal places để giảm sub-pixel issues
+      // Và dùng scale3d thay vì scale để force GPU compositing đúng cách
+      const roundedScale = Math.round(scale * 1000) / 1000;
+      
+      // FIX: Dùng transform không có translateZ để tránh blur
+      // translateZ(0) force GPU layer nhưng gây blur text
+      wrapper.style.transform = `scale(${roundedScale})`;
 
-      // fallback khi aspect-ratio không hoạt động ở môi trường embed lạ
+      // fallback khi aspect-ratio không hoạt động
       if (!isFull) {
         container.style.height = `${cw * (height / width)}px`;
       }
@@ -618,7 +679,11 @@ ${content}
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-      updateScale();
+      
+      // FIX TEXT BLUR: Thêm delay nhỏ để browser render lại đúng
+      requestAnimationFrame(() => {
+        updateScale();
+      });
 
       try {
         iframe.contentWindow && iframe.contentWindow.postMessage(
@@ -738,7 +803,7 @@ ${content}
   // 6) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.4.0',
+    version: '3.5.0',
     render,
     themes: THEMES,
     getThemeByName,
