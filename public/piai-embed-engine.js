@@ -1,5 +1,5 @@
 // piai-embed-engine.js
-// v3.3.3 – FIX TRIỆT ĐỂ hover list bị cắt (no overflow-dependent effects) + enlarge header icons + gap 20px
+// v3.3.4 – button gap 10px + fix hover border aliasing (no white pixels)
 // Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
 
 (function (global) {
@@ -69,10 +69,8 @@
     return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName];
   }
 
-  // Base CSS trong iframe – FIX TRIỆT ĐỂ clipping:
-  // - Hover list-item dùng inset ring (không vẽ ra ngoài), không translate/box-shadow ngoài => không thể bị clip bởi scroll container
-  // - Căn giữa icon/chữ (hdr/def/list)
-  // - Header buttons: icon to hơn + khoảng cách 20px giữa theme và fullscreen
+  // Base CSS trong iframe – FIX triệt để hover clipping + align icon/text
+  // v3.3.4: theme/fs gap 10px + hover border anti-aliasing (no white pixels)
   function getBaseCss(theme) {
     return `:root{
   --piai-primary:${theme.primary};
@@ -105,7 +103,7 @@ body{
   background:var(--piai-primary);
   color:#fff;
   padding:12px 20px;
-  padding-right:140px; /* tăng chút vì nút to + khoảng cách */
+  padding-right:130px; /* nút to + gap 10px */
   font-weight:700;
   display:flex;
   align-items:center;
@@ -168,17 +166,15 @@ body{
   flex-direction:column;
   overflow-y:auto;
   overflow-x:hidden;
-  scrollbar-gutter: stable;   /* giữ chỗ scrollbar (nếu support) */
+  scrollbar-gutter: stable;
   position:relative;
   list-style:none;
-
-  /* chừa nhiều không gian mép phải để tránh scrollbar overlay che nét */
-  padding-right:26px;
+  padding-right:26px; /* tránh scrollbar overlay */
   padding-left:6px;
   min-height:0;
 }
 
-/* Item không "đẩy ra ngoài" (no translateX/box-shadow ngoài) */
+/* Item: bỏ border thật, dùng inset shadow làm viền => hết răng cưa/white pixels khi scale */
 .piai-list-item{
   position:relative;
   z-index:0;
@@ -189,23 +185,26 @@ body{
   margin-bottom:8px;
 
   background:var(--piai-bg);
-  border:1px solid var(--piai-text-light);
+
+  border:1px solid transparent;                 /* border thật = transparent */
   border-radius:10px;
+  background-clip:padding-box;                  /* giảm seam khi scale */
+  box-shadow: inset 0 0 0 1px var(--piai-text-light); /* viền giả */
 
   font-size:.9rem;
   line-height:1.45;
 
-  transition:background-color .18s, border-color .18s, box-shadow .18s;
+  transition:background-color .18s, box-shadow .18s;
+  transform:translateZ(0);
+  backface-visibility:hidden;
 }
 .piai-list-item:last-child{margin-bottom:0}
 
-/* HOVER: dùng inset ring => 100% nằm trong item, KHÔNG BAO GIỜ bị cắt */
+/* Hover: viền inset dày hơn, không còn border-color chồng lớp */
 .piai-list-item:hover{
-  border-color:var(--piai-accent);
   box-shadow: inset 0 0 0 2px var(--piai-accent);
 }
 
-/* Icon wrapper luôn đúng tâm + đủ “room” để scale mà vẫn nằm trong item */
 .piai-list-item .piai-ico{
   color:var(--piai-accent);
   width:24px;height:24px;
@@ -216,8 +215,6 @@ body{
   transition:transform .18s;
 }
 .piai-list-item .piai-ico svg{width:22px;height:22px;display:block}
-
-/* Icon scale vẫn nằm trong item (đã tăng padding + box) */
 .piai-list-item:hover .piai-ico{transform:scale(1.22) rotate(8deg)}
 
 .piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}
@@ -227,7 +224,7 @@ body{
 .piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}
 .piai-visual svg{max-width:100%;max-height:100%}
 
-/* Header buttons (icon to hơn + gap 20px) */
+/* Header buttons (icon to hơn + gap 10px) */
 .hdr-btn{
   position:absolute;
   top:50%;
@@ -252,9 +249,9 @@ body{
 }
 .hdr-btn svg{width:26px;height:26px;display:block}
 
-/* fs ở sát phải; theme cách fs đúng 20px (48 + 20 = 68) */
+/* fs ở sát phải; theme cách fs đúng 10px (48 + 10 = 58) */
 .fs-btn{right:0}
-.theme-btn{right:68px}
+.theme-btn{right:58px}
 
 /* Loader */
 .piai-loader{
@@ -291,7 +288,7 @@ body{
   .piai-grid>*{margin-right:0;margin-bottom:16px}
   .piai-grid>*:last-child{margin-bottom:0}
   .piai-visual{flex:0 0 auto;padding:10px;width:100%}
-  .piai-hdr{padding:10px 16px;padding-right:140px}
+  .piai-hdr{padding:10px 16px;padding-right:130px}
 }`;
   }
 
@@ -617,7 +614,7 @@ ${content}
   // 6) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.3.3',
+    version: '3.3.4',
     render,
     themes: THEMES,
     getThemeByName,
