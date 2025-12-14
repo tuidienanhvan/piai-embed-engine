@@ -169,7 +169,7 @@ body{
   margin-bottom:8px;
 }
 .piai-list-item:last-child{margin-bottom:0}
-.piai-list-item:hover{transform:translateX(-4px);border-color:var(--piai-accent)}
+.piai-list-item:hover{transform:translateX(4px);border-color:var(--piai-accent)}
 .piai-list-item>*{margin-right:12px}
 .piai-list-item>*:last-child{margin-right:0}
 .piai-list-item .piai-ico{
