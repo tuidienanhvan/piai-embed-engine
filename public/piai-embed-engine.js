@@ -153,11 +153,15 @@ body{
   display:flex;
   flex-direction:column;
   overflow-y:auto;
+  overflow-x:visible;
+  position: relative;
   list-style:none;
   padding-right:4px;
   min-height:0;
 }
 .piai-list-item{
+  position: relative;
+  z-index: 0;
   display:flex;
   align-items:flex-start;
   padding:10px 14px;
@@ -169,7 +173,7 @@ body{
   margin-bottom:8px;
 }
 .piai-list-item:last-child{margin-bottom:0}
-.piai-list-item:hover{transform:translateX(4px);border-color:var(--piai-accent)}
+.piai-list-item:hover{transform:translateX(4px);border-color:var(--piai-accent);z-index: 2;}
 .piai-list-item>*{margin-right:12px}
 .piai-list-item>*:last-child{margin-right:0}
 .piai-list-item .piai-ico{
