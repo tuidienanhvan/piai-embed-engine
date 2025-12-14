@@ -342,7 +342,7 @@ body{
 }
 .ex-box > span:last-child{
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.45;
   min-width: 0;
   word-break: break-word;
 }
