@@ -1,10 +1,13 @@
 // piai-embed-engine.js
-// v3.3.0 – Container full width (100%), keep 16:9, scale canvas to fill container
-// Giữ nguyên: fullscreen desktop, iOS standalone (mở tab), không memory leak
+// v3.3.1 – Full width 16:9 + radius fix (container clips; iframe no radius)
+// Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
 
 (function (global) {
   'use strict';
 
+  // ============================================================
+  // 1) THEMES
+  // ============================================================
   const THEMES = {
     classic: {
       name: 'classic',
@@ -38,8 +41,8 @@
   const THEME_ORDER = ['classic', 'educational', 'night'];
 
   const DEFAULT_CONFIG = {
-    width: 800,   // design canvas
-    height: 450,  // design canvas
+    width: 800,
+    height: 450,
     aspect: '16 / 9',
     themeName: 'classic',
     headExtra: '',
@@ -52,6 +55,9 @@
 
   const BASE_RADIUS = 16;
 
+  // ============================================================
+  // 2) HELPERS
+  // ============================================================
   function detectDevice() {
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
@@ -63,9 +69,9 @@
     return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName];
   }
 
+  // Base CSS trong iframe – tham khảo v2.2, chỉ chỉnh nhẹ cho ổn định
   function getBaseCss(theme) {
-    return `
-:root{
+    return `:root{
   --piai-primary:${theme.primary};
   --piai-accent:${theme.accent};
   --piai-secondary:${theme.secondary};
@@ -73,26 +79,22 @@
   --piai-text:${theme.text};
   --piai-text-light:${theme.textLight};
 }
-html,body{width:100%;height:100%}
 *{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%}
 body{
   font-family:${SYSTEM_FONT_STACK};
   color:var(--piai-text);
-  background:var(--piai-bg);
+  background:transparent;
   overflow:hidden;
 }
 .piai-wrap{
   width:100%;
   height:100%;
-  min-height:100%;
   background:var(--piai-bg);
   display:flex;
   flex-direction:column;
   overflow:hidden;
   position:relative;
-}
-.piai-wrap,.piai-hdr,.piai-def,.piai-list-item,.piai-body{
-  transition:background-color .25s ease,color .25s ease,border-color .25s ease,box-shadow .25s ease;
 }
 .piai-hdr{
   background:var(--piai-primary);
@@ -110,23 +112,27 @@ body{
 .piai-hdr svg{width:20px;height:20px}
 .piai-body{
   flex:1;
-  min-height:0;
   padding:15px 20px;
   overflow-y:auto;
   overflow-x:hidden;
   display:flex;
   flex-direction:column;
+  min-height:0;
 }
 .piai-body>*{margin-bottom:15px}
 .piai-body>*:last-child{margin-bottom:0}
 .piai-body::-webkit-scrollbar{width:6px}
-.piai-body::-webkit-scrollbar-thumb{background:var(--piai-text-light);border-radius:3px}
+.piai-body::-webkit-scrollbar-thumb{
+  background:var(--piai-text-light);
+  border-radius:3px;
+}
 .piai-def{
   background:var(--piai-bg);
   border-left:5px solid var(--piai-primary);
   padding:12px 18px;
   border-radius:0 8px 8px 0;
-  transition:all 0.3s;
+  transition:all .3s;
+  /* box-shadow: none;  // nếu muốn bỏ shadow defbox thì bật dòng này */
 }
 .piai-def:hover{transform:translateY(-2px)}
 .piai-def-title{
@@ -136,21 +142,20 @@ body{
   align-items:center;
   margin-bottom:6px;
 }
-.piai-def-title>*{margin-right:12px}
+.piai-def-title>*{margin-right:10px} /* icon cách chữ hơn chút */
 .piai-def-title>*:last-child{margin-right:0}
-.piai-def-content{line-height:1.5;font-size:0.95rem}
+.piai-def-content{line-height:1.5;font-size:.95rem}
 .piai-grid{display:flex;flex:1;min-height:0}
 .piai-grid>*{margin-right:20px}
 .piai-grid>*:last-child{margin-right:0}
 .piai-list{
   flex:1;
-  min-height:0;
   display:flex;
   flex-direction:column;
   overflow-y:auto;
   list-style:none;
-  padding-left:6px;
   padding-right:4px;
+  min-height:0;
 }
 .piai-list-item{
   display:flex;
@@ -159,8 +164,8 @@ body{
   background:var(--piai-bg);
   border:1px solid var(--piai-text-light);
   border-radius:8px;
-  font-size:0.9rem;
-  transition:all 0.3s;
+  font-size:.9rem;
+  transition:all .3s;
   margin-bottom:8px;
 }
 .piai-list-item:last-child{margin-bottom:0}
@@ -171,19 +176,17 @@ body{
   color:var(--piai-accent);
   display:flex;
   margin-top:2px;
-  transition:all 0.3s;
+  transition:all .3s;
 }
 .piai-list-item:hover .piai-ico{transform:scale(1.15) rotate(8deg)}
 .piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}
 .piai-list-item strong{color:var(--piai-primary)}
 .piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}
 .piai-visual svg{max-width:100%;max-height:100%}
-
-/* Header buttons */
 .hdr-btn{
   position:absolute;top:0;z-index:999;width:48px;height:48px;
   background:transparent;border:none;cursor:pointer;color:var(--piai-accent);
-  display:flex;align-items:center;justify-content:center;transition:all 0.2s;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;
 }
 .hdr-btn:hover{color:#fff;transform:scale(1.1)}
 .hdr-btn svg{width:22px;height:22px}
@@ -192,15 +195,20 @@ body{
 
 /* Loader */
 .piai-loader{
-  position:absolute;inset:0;background:rgba(0,0,0,0.2);
+  position:absolute;inset:0;
+  background:rgba(0,0,0,0.2);
   display:flex;align-items:center;justify-content:center;
-  z-index:1000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  z-index:1000;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
   transition:opacity .3s ease,visibility .3s ease;
 }
 .piai-loader.hide{opacity:0;visibility:hidden}
 .piai-loader .loader-inner{
-  padding:14px 28px;border-radius:30px;background:rgba(255,255,255,0.85);
-  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  padding:14px 28px;border-radius:30px;
+  background:rgba(255,255,255,0.85);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
   border:1px solid rgba(255,255,255,0.5);
   box-shadow:0 8px 32px 0 rgba(31,38,135,0.15);
   display:flex;align-items:center;gap:12px;
@@ -209,7 +217,8 @@ body{
   width:24px;height:24px;border:3px solid transparent;
   border-top-color:var(--piai-primary,#007bff);
   border-right-color:var(--piai-primary,#007bff);
-  border-radius:50%;animation:spin .8s linear infinite;
+  border-radius:50%;
+  animation:spin .8s linear infinite;
 }
 .loader-text{font-size:.9rem;font-weight:600;color:#333}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -220,8 +229,7 @@ body{
   .piai-grid>*:last-child{margin-bottom:0}
   .piai-visual{flex:0 0 auto;padding:10px;width:100%}
   .piai-hdr{padding:10px 16px;padding-right:100px}
-}
-`;
+}`;
   }
 
   function buildHtmlDocument(content, baseCss, headExtra) {
@@ -253,28 +261,30 @@ ${content}
 </html>`;
   }
 
-  // IMPORTANT: default style = full width of parent, keep 16:9
+  // CSS container: tham khảo v2.2 cho "radius clean"
   function createBaseStyle(theme, aspect) {
     const borderCol = (theme.primary || '#800020') + '26';
-    const shadowCol = (theme.secondary || '#002b5c') + '26';
 
     return {
       default:
-        `width:100%;max-width:100%;` +
+        `width:100%;max-width:100%;display:block;position:relative;` +
         `aspect-ratio:${aspect};height:auto;` +
-        `position:relative;overflow:hidden;` +
         `border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${borderCol};` +
-        `background:${theme.bg || '#f9f7f5'};`,
+        `overflow:hidden;` +                 /* QUAN TRỌNG: container cắt góc */
+        `background:transparent;`,           /* giống v2.2 */
       fullscreen:
         `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
         `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
-        `box-shadow:none;overflow:hidden;` +
+        `overflow:hidden;` +
         `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
         `env(safe-area-inset-bottom) env(safe-area-inset-left)`,
     };
   }
 
+  // ============================================================
+  // 3) RENDER
+  // ============================================================
   function render(options) {
     const config = Object.assign({}, DEFAULT_CONFIG, options || {});
     const {
@@ -296,6 +306,7 @@ ${content}
       containerFromConfig || (typeof id === 'string' ? document.getElementById(id) : null);
     if (!container) return;
 
+    // cleanup instance cũ nếu render lại cùng container
     if (typeof container.__piaiCleanup === 'function') {
       try { container.__piaiCleanup(); } catch (_) {}
       container.__piaiCleanup = null;
@@ -312,10 +323,11 @@ ${content}
     let baseCss = getBaseCss(currentTheme);
     let baseStyle = createBaseStyle(currentTheme, aspect);
 
+    // reset DOM
     while (container.firstChild) container.removeChild(container.firstChild);
     container.style.cssText = baseStyle.default;
 
-    // wrapper = design canvas (800x450), scale to fill container
+    // wrapper: design canvas 800x450 (scale để full width)
     const wrapper = document.createElement('div');
     wrapper.style.cssText =
       `position:absolute;top:0;left:0;` +
@@ -342,6 +354,7 @@ ${content}
 
     const iframeHtml = buildHtmlDocument(iframeRaw, baseCss, headExtra);
 
+    // iOS standalone url
     let iosStandaloneUrl = '';
     if (isIOS) {
       const standaloneRaw = generator(Object.assign({}, ctxBase, { isStandalone: true }));
@@ -359,33 +372,30 @@ ${content}
 
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
-    iframe.style.cssText = `width:100%;height:100%;border:none;display:block;` +
-      `background:transparent;border-radius:${BASE_RADIUS}px;`;
+
+    // QUAN TRỌNG: KHÔNG border-radius ở iframe — để container cắt góc (fix “hở góc”)
+    iframe.style.cssText =
+      `width:100%;height:100%;border:none;display:block;` +
+      `background:${currentTheme.bg || '#f9f7f5'};`;
+
     iframe.scrolling = 'no';
     iframe.loading = 'lazy';
-    iframe.sandbox = 'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
+    iframe.sandbox =
+      'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
     iframe.allow = 'fullscreen; clipboard-read; clipboard-write';
     if (iosStandaloneUrl) iframe.dataset.iosStandaloneUrl = iosStandaloneUrl;
 
     iframe.onload = function () {
       try { URL.revokeObjectURL(blobUrl); } catch (_) {}
 
-      // defensive: luôn phủ full + nền đúng theme (tránh override)
+      // apply theme message
       try {
-        const doc = iframe.contentDocument;
-        if (doc && doc.documentElement && doc.body) {
-          doc.documentElement.style.height = '100%';
-          doc.body.style.height = '100%';
-          doc.body.style.background = currentTheme.bg || '#f9f7f5';
+        if (iframe.contentWindow) {
+          iframe.contentWindow.postMessage(
+            { type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme },
+            '*'
+          );
         }
-        iframe.style.background = currentTheme.bg || '#f9f7f5';
-      } catch (_) {}
-
-      try {
-        iframe.contentWindow && iframe.contentWindow.postMessage(
-          { type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme },
-          '*'
-        );
       } catch (_) {}
 
       if (typeof onReady === 'function') {
@@ -394,14 +404,15 @@ ${content}
       }
     };
 
-    // ===== Scale logic: fill width of container (no side gap) =====
+    // ============================================================
+    // 4) FULLSCREEN & SCALING (fill width, keep 16:9)
+    // ============================================================
     let isFull = false;
     let resizeRAF = null;
 
     const updateScale = () => {
       const cw = container.clientWidth || width;
 
-      // normal mode: fill full width => scale = cw/width
       let scale = cw / width;
 
       if (isFull) {
@@ -412,10 +423,10 @@ ${content}
 
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
-      wrapper.style.transform = `scale(${scale})`;
+      // translateZ(0) giúp tránh “kẹt góc” do subpixel khi scale
+      wrapper.style.transform = `translateZ(0) scale(${scale})`;
 
-      // fallback nếu aspect-ratio bị ignore ở môi trường lạ:
-      // giữ 16:9 theo cw
+      // fallback khi aspect-ratio không hoạt động ở môi trường embed lạ
       if (!isFull) {
         container.style.height = `${cw * (height / width)}px`;
       }
@@ -424,10 +435,6 @@ ${content}
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-
-      iframe.style.boxShadow = state ? '0 0 60px rgba(0,0,0,.4)' : 'none';
-      iframe.style.borderRadius = state ? '0' : BASE_RADIUS + 'px';
-
       updateScale();
 
       try {
@@ -441,6 +448,7 @@ ${content}
     const switchTheme = () => {
       let idx = THEME_ORDER.indexOf(currentThemeName);
       if (idx < 0) idx = 0;
+
       currentThemeName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
       currentTheme = getThemeByName(currentThemeName);
 
@@ -448,6 +456,8 @@ ${content}
       baseStyle = createBaseStyle(currentTheme, aspect);
 
       container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
+      iframe.style.background = currentTheme.bg || '#f9f7f5';
+
       updateScale();
 
       try {
@@ -463,6 +473,9 @@ ${content}
       }
     };
 
+    // ============================================================
+    // 5) EVENTS + CLEANUP
+    // ============================================================
     const onMessage = (e) => {
       if (!e.data || e.data.id !== containerId) return;
 
@@ -532,13 +545,17 @@ ${content}
     }
     container.__piaiCleanup = cleanup;
 
+    // mount
     wrapper.appendChild(iframe);
     container.appendChild(wrapper);
     updateScale();
   }
 
+  // ============================================================
+  // 6) EXPORT
+  // ============================================================
   global.PiaiEmbed = {
-    version: '3.3.0',
+    version: '3.3.1',
     render,
     themes: THEMES,
     getThemeByName,
