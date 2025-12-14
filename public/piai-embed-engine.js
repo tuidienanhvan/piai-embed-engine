@@ -303,18 +303,18 @@ body{
 }
 .ex-tag{
   font-weight: 700;
-  font-size: 10px;
+  font-size: 8px;
   line-height: 1.2;
   color: #fff;
   background: var(--piai-secondary);
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 2px 6px;
+  border-radius: 2px;
   text-transform: uppercase;
   white-space: nowrap;
   flex: 0 0 auto;
 }
 .ex-box > span:last-child{
-  font-size: 13px;
+  font-size: 10px;
   line-height: 1.25;
   min-width: 0;
   word-break: break-word;
