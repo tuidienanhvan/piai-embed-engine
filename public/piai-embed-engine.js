@@ -355,7 +355,7 @@ body{
 .piai-brand{
   position: absolute;
   /* FIX: Dùng calc để đảm bảo vị trí, right: -2px có thể bị clip */
-  right: 0;
+  right: -20px;
   bottom: 12px;
   width: 96px;
   height: 26px;
