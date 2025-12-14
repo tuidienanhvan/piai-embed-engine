@@ -1,5 +1,5 @@
 // piai-embed-engine.js
-// v3.3.4 – button gap 10px + fix hover border aliasing (no white pixels)
+// v3.4.0 – add "ex-box" styles + opt-in fitMode:no-scroll/compact
 // Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
 
 (function (global) {
@@ -46,6 +46,9 @@
     aspect: '16 / 9',
     themeName: 'classic',
     headExtra: '',
+    // NEW:
+    // 'scroll' (default) | 'no-scroll' | 'compact'
+    fitMode: 'scroll',
   };
 
   const SYSTEM_FONT_STACK =
@@ -69,8 +72,14 @@
     return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName];
   }
 
+  function normalizeFitMode(mode) {
+    const m = String(mode || '').toLowerCase().trim();
+    if (m === 'no-scroll' || m === 'noscroll' || m === 'compact') return 'no-scroll';
+    return 'scroll';
+  }
+
   // Base CSS trong iframe – FIX triệt để hover clipping + align icon/text
-  // v3.3.4: theme/fs gap 10px + hover border anti-aliasing (no white pixels)
+  // + NEW: ex-box styles + fitMode(no-scroll) styles (opt-in via html class)
   function getBaseCss(theme) {
     return `:root{
   --piai-primary:${theme.primary};
@@ -159,7 +168,6 @@ body{
 .piai-grid>*:last-child{margin-right:0}
 
 /* ========== LIST (FIX TRIỆT ĐỂ hover clipping) ========== */
-/* Scroll container sẽ clip mọi thứ vẽ ra ngoài; vì vậy hover chỉ vẽ "trong" item. */
 .piai-list{
   flex:1;
   display:flex;
@@ -174,7 +182,7 @@ body{
   min-height:0;
 }
 
-/* Item: bỏ border thật, dùng inset shadow làm viền => hết răng cưa/white pixels khi scale */
+/* Item: border thật transparent + inset shadow làm viền => hết răng cưa/white pixels khi scale */
 .piai-list-item{
   position:relative;
   z-index:0;
@@ -186,10 +194,10 @@ body{
 
   background:var(--piai-bg);
 
-  border:1px solid transparent;                 /* border thật = transparent */
+  border:1px solid transparent;
   border-radius:10px;
-  background-clip:padding-box;                  /* giảm seam khi scale */
-  box-shadow: inset 0 0 0 1px var(--piai-text-light); /* viền giả */
+  background-clip:padding-box;
+  box-shadow: inset 0 0 0 1px var(--piai-text-light);
 
   font-size:.9rem;
   line-height:1.45;
@@ -199,8 +207,6 @@ body{
   backface-visibility:hidden;
 }
 .piai-list-item:last-child{margin-bottom:0}
-
-/* Hover: viền inset dày hơn, không còn border-color chồng lớp */
 .piai-list-item:hover{
   box-shadow: inset 0 0 0 2px var(--piai-accent);
 }
@@ -216,7 +222,6 @@ body{
 }
 .piai-list-item .piai-ico svg{width:22px;height:22px;display:block}
 .piai-list-item:hover .piai-ico{transform:scale(1.22) rotate(8deg)}
-
 .piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}
 .piai-list-item strong{color:var(--piai-primary)}
 
@@ -248,8 +253,6 @@ body{
   transform:translateY(-50%) scale(1.1);
 }
 .hdr-btn svg{width:26px;height:26px;display:block}
-
-/* fs ở sát phải; theme cách fs đúng 10px (48 + 10 = 58) */
 .fs-btn{right:0}
 .theme-btn{right:58px}
 
@@ -283,12 +286,124 @@ body{
 .loader-text{font-size:.9rem;font-weight:600;color:#333}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ===========================
+   NEW: EX BOX (Ví dụ) styles
+   =========================== */
+.ex-box{
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0,0,0,.12);
+  display:flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.95em;
+  color: var(--piai-text);
+  min-width:0;
+}
+.ex-tag{
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1.2;
+  color: #fff;
+  background: var(--piai-secondary);
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.ex-box > span:last-child{
+  font-size: 13px;
+  line-height: 1.25;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ===========================
+   NEW: BRAND LOGO (optional)
+   =========================== */
+.piai-brand{
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 96px;
+  height: 26px;
+  background: var(--piai-primary);
+  opacity: .95;
+  pointer-events: none;
+
+  -webkit-mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: left center;
+  -webkit-mask-size: contain;
+
+  mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
+  mask-repeat: no-repeat;
+  mask-position: left center;
+  mask-size: contain;
+}
+
+/* ==========================================
+   NEW: FIT MODE (no-scroll / compact) OPT-IN
+   Activated when <html> has class .piai-fit-noscroll
+   ========================================== */
+.piai-fit-noscroll .piai-body{ overflow:hidden !important; }
+.piai-fit-noscroll .piai-def{ margin-bottom: 8px !important; }
+.piai-fit-noscroll .piai-def-title{ font-size: 14px !important; }
+.piai-fit-noscroll .piai-def-content{ font-size: 13px !important; line-height: 1.25 !important; }
+
+.piai-fit-noscroll .piai-grid{
+  display:flex !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+}
+.piai-fit-noscroll .piai-grid>*{ margin-right: 0 !important; } /* bỏ spacing cũ */
+.piai-fit-noscroll .piai-list{
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding-right: 0 !important;
+}
+.piai-fit-noscroll .piai-list-item{
+  padding: 9px 11px !important;
+  margin: 0 0 8px 0 !important;
+}
+.piai-fit-noscroll .piai-list-item > div{
+  min-width: 0;
+  font-size: 13px !important;
+  line-height: 1.25 !important;
+}
+.piai-fit-noscroll .piai-list-item strong{
+  display:inline-block;
+  margin-bottom: 2px;
+}
+.piai-fit-noscroll .piai-visual{
+  width: 270px;
+  max-width: 270px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.piai-fit-noscroll .piai-visual svg{
+  width:100%;
+  height:auto;
+  display:block;
+}
+
 @media (max-width:650px){
   .piai-grid{flex-direction:column}
   .piai-grid>*{margin-right:0;margin-bottom:16px}
   .piai-grid>*:last-child{margin-bottom:0}
   .piai-visual{flex:0 0 auto;padding:10px;width:100%}
   .piai-hdr{padding:10px 16px;padding-right:130px}
+
+  .piai-fit-noscroll .piai-visual{
+    width: 100%;
+    max-width: 100%;
+  }
 }`;
   }
 
@@ -360,6 +475,7 @@ ${content}
       headExtra,
       onReady,
       onThemeChange,
+      fitMode,
     } = config;
 
     const container =
@@ -409,17 +525,26 @@ ${content}
       isIOS,
     };
 
+    // fitMode -> inject a tiny script that adds class on <html>
+    const fitNorm = normalizeFitMode(fitMode);
+    const fitHead =
+      fitNorm === 'no-scroll'
+        ? `<script>(function(){try{document.documentElement.classList.add('piai-fit-noscroll');}catch(_){}})();<\/script>`
+        : '';
+
+    const headExtraFinal = (headExtra || '') + fitHead;
+
     const iframeRaw = generator(Object.assign({}, ctxBase, { isStandalone: false }));
     if (!iframeRaw) return;
 
-    const iframeHtml = buildHtmlDocument(iframeRaw, baseCss, headExtra);
+    const iframeHtml = buildHtmlDocument(iframeRaw, baseCss, headExtraFinal);
 
     // iOS standalone url
     let iosStandaloneUrl = '';
     if (isIOS) {
       const standaloneRaw = generator(Object.assign({}, ctxBase, { isStandalone: true }));
       if (standaloneRaw) {
-        const standaloneHtml = buildHtmlDocument(standaloneRaw, baseCss, headExtra);
+        const standaloneHtml = buildHtmlDocument(standaloneRaw, baseCss, headExtraFinal);
         try {
           iosStandaloneUrl = URL.createObjectURL(new Blob([standaloneHtml], { type: 'text/html' }));
         } catch (e) {
@@ -472,7 +597,6 @@ ${content}
 
     const updateScale = () => {
       const cw = container.clientWidth || width;
-
       let scale = cw / width;
 
       if (isFull) {
@@ -614,7 +738,7 @@ ${content}
   // 6) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.3.4',
+    version: '3.4.0',
     render,
     themes: THEMES,
     getThemeByName,
@@ -624,6 +748,7 @@ ${content}
       height: DEFAULT_CONFIG.height,
       aspect: DEFAULT_CONFIG.aspect,
       themeName: DEFAULT_CONFIG.themeName,
+      fitMode: DEFAULT_CONFIG.fitMode,
     },
   };
 })(window);
