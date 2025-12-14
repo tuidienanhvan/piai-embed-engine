@@ -1,5 +1,5 @@
 // piai-embed-engine.js
-// v3.3.1 – Full width 16:9 + radius fix (container clips; iframe no radius)
+// v3.3.2 – Fix list hover clipping + align icons/text (hdr/def/list)
 // Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
 
 (function (global) {
@@ -69,7 +69,7 @@
     return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName];
   }
 
-  // Base CSS trong iframe – tham khảo v2.2, chỉ chỉnh nhẹ cho ổn định
+  // Base CSS trong iframe – fix hover list bị cắt + căn giữa icon/chữ
   function getBaseCss(theme) {
     return `:root{
   --piai-primary:${theme.primary};
@@ -96,6 +96,8 @@ body{
   overflow:hidden;
   position:relative;
 }
+
+/* ========== HEADER (align icon + text) ========== */
 .piai-hdr{
   background:var(--piai-primary);
   color:#fff;
@@ -104,12 +106,14 @@ body{
   font-weight:700;
   display:flex;
   align-items:center;
+  gap:10px;
+  line-height:1.2;
   border-bottom:3px solid var(--piai-accent);
   position:relative;
 }
-.piai-hdr>*{margin-right:10px}
-.piai-hdr>*:last-child{margin-right:0}
-.piai-hdr svg{width:20px;height:20px}
+.piai-hdr svg{width:20px;height:20px;display:block;flex:0 0 auto}
+
+/* Body */
 .piai-body{
   flex:1;
   padding:15px 20px;
@@ -126,13 +130,15 @@ body{
   background:var(--piai-text-light);
   border-radius:3px;
 }
+
+/* Def box */
 .piai-def{
   background:var(--piai-bg);
   border-left:5px solid var(--piai-primary);
   padding:12px 18px;
   border-radius:0 8px 8px 0;
   transition:all .3s;
-  /* box-shadow: none;  // nếu muốn bỏ shadow defbox thì bật dòng này */
+  /* box-shadow: none; */
 }
 .piai-def:hover{transform:translateY(-2px)}
 .piai-def-title{
@@ -140,60 +146,91 @@ body{
   font-weight:700;
   display:flex;
   align-items:center;
+  gap:10px;
+  line-height:1.25;
   margin-bottom:6px;
 }
-.piai-def-title>*{margin-right:10px} /* icon cách chữ hơn chút */
-.piai-def-title>*:last-child{margin-right:0}
+.piai-def-title svg{display:block;flex:0 0 auto}
 .piai-def-content{line-height:1.5;font-size:.95rem}
+
+/* Grid */
 .piai-grid{display:flex;flex:1;min-height:0}
 .piai-grid>*{margin-right:20px}
 .piai-grid>*:last-child{margin-right:0}
+
+/* ========== LIST (fix hover clipping) ========== */
 .piai-list{
   flex:1;
   display:flex;
   flex-direction:column;
   overflow-y:auto;
-  overflow-x:visible;
-  position: relative;
+  overflow-x:hidden;         /* scroll container => avoid cross-axis visible quirks */
+  scrollbar-gutter: stable;  /* reserve scrollbar space (supported browsers) */
+  position:relative;
   list-style:none;
-  padding-right:4px;
+  padding-right:14px;        /* avoid edge being covered by scrollbar */
+  padding-left:4px;
   min-height:0;
 }
+
 .piai-list-item{
   position: relative;
   z-index: 0;
   display:flex;
-  align-items:flex-start;
+  align-items:center;        /* center icon + text */
+  gap:12px;                  /* consistent spacing */
   padding:10px 14px;
   background:var(--piai-bg);
   border:1px solid var(--piai-text-light);
   border-radius:8px;
   font-size:.9rem;
-  transition:all .3s;
+  line-height:1.45;
+  transition:transform .2s, border-color .2s, box-shadow .2s;
   margin-bottom:8px;
+  will-change:transform;
 }
 .piai-list-item:last-child{margin-bottom:0}
-.piai-list-item:hover{transform:translateX(4px);border-color:var(--piai-accent);z-index: 2;}
-.piai-list-item>*{margin-right:12px}
-.piai-list-item>*:last-child{margin-right:0}
+
+/* Hover: no translateX => no need overflow-x visible, no clipping */
+.piai-list-item:hover{
+  transform:translateY(-1px);
+  border-color:var(--piai-accent);
+  box-shadow:0 10px 24px rgba(0,0,0,.10);
+  z-index:2;
+}
+
 .piai-list-item .piai-ico{
   color:var(--piai-accent);
+  width:20px;height:20px;
+  flex:0 0 20px;
   display:flex;
-  margin-top:2px;
-  transition:all .3s;
+  align-items:center;
+  justify-content:center;
+  margin-top:0;
+  transition:transform .2s;
 }
-.piai-list-item:hover .piai-ico{transform:scale(1.15) rotate(8deg)}
+.piai-list-item .piai-ico svg{width:20px;height:20px;display:block}
+.piai-list-item:hover .piai-ico{transform:scale(1.12) rotate(8deg)}
+
 .piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}
 .piai-list-item strong{color:var(--piai-primary)}
+
+/* Visual */
 .piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}
 .piai-visual svg{max-width:100%;max-height:100%}
+
+/* Header buttons */
 .hdr-btn{
-  position:absolute;top:0;z-index:999;width:48px;height:48px;
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  z-index:999;
+  width:48px;height:48px;
   background:transparent;border:none;cursor:pointer;color:var(--piai-accent);
   display:flex;align-items:center;justify-content:center;transition:all .2s;
 }
-.hdr-btn:hover{color:#fff;transform:scale(1.1)}
-.hdr-btn svg{width:22px;height:22px}
+.hdr-btn:hover{color:#fff;transform:translateY(-50%) scale(1.1)}
+.hdr-btn svg{width:22px;height:22px;display:block}
 .theme-btn{right:24px}
 .fs-btn{right:0}
 
@@ -275,8 +312,8 @@ ${content}
         `aspect-ratio:${aspect};height:auto;` +
         `border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${borderCol};` +
-        `overflow:hidden;` +                 /* QUAN TRỌNG: container cắt góc */
-        `background:transparent;`,           /* giống v2.2 */
+        `overflow:hidden;` +                 /* container cắt góc */
+        `background:transparent;`,
       fullscreen:
         `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
         `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
@@ -377,7 +414,7 @@ ${content}
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
 
-    // QUAN TRỌNG: KHÔNG border-radius ở iframe — để container cắt góc (fix “hở góc”)
+    // QUAN TRỌNG: KHÔNG border-radius ở iframe — để container cắt góc
     iframe.style.cssText =
       `width:100%;height:100%;border:none;display:block;` +
       `background:${currentTheme.bg || '#f9f7f5'};`;
@@ -559,7 +596,7 @@ ${content}
   // 6) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.3.1',
+    version: '3.3.2',
     render,
     themes: THEMES,
     getThemeByName,
