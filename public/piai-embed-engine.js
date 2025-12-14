@@ -325,7 +325,7 @@ body{
    =========================== */
 .piai-brand{
   position: absolute;
-  right: 4px;
+  right: -2px;
   bottom: 12px;
   width: 96px;
   height: 26px;
