@@ -1,6 +1,9 @@
 // piai-embed-engine.js
 // v3.5.0 – FIX: logo positioning + text blur on hover/fullscreen
 // Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
+// FIX (Android):
+// 1) Wrapper khít với border div nhúng (tránh hở do rounding scale)
+// 2) Fullscreen align center (canh giữa chuẩn trên Android)
 
 (function (global) {
   'use strict';
@@ -63,8 +66,9 @@
   function detectDevice() {
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    const isAndroid = /Android/i.test(ua);
     const isMobile = isIOS || /Mobi|Android/i.test(ua);
-    return { isIOS, isMobile };
+    return { isIOS, isAndroid, isMobile };
   }
 
   function getThemeByName(name) {
@@ -498,6 +502,7 @@ ${content}
     return {
       default:
         `width:100%;max-width:100%;display:block;position:relative;` +
+        `box-sizing:border-box;` +
         `aspect-ratio:${aspect};height:auto;` +
         `border-radius:${BASE_RADIUS}px;` +
         `border:1px solid ${borderCol};` +
@@ -505,6 +510,7 @@ ${content}
         `background:transparent;`,
       fullscreen:
         `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;` +
+        `box-sizing:border-box;` +
         `margin:0;border-radius:0;z-index:99999;background:#000;border:none;` +
         `overflow:hidden;` +
         `padding:env(safe-area-inset-top) env(safe-area-inset-right) ` +
@@ -546,7 +552,7 @@ ${content}
     const containerId = container.id || (typeof id === 'string' ? id : 'piai_' + Date.now());
     container.id = containerId;
 
-    const { isIOS } = detectDevice();
+    const { isIOS, isAndroid, isMobile } = detectDevice();
 
     let currentTheme = themeOverride || getThemeByName(themeName);
     let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
@@ -645,33 +651,63 @@ ${content}
 
     // ============================================================
     // 4) FULLSCREEN & SCALING
-    // FIX TEXT BLUR: Round scale to avoid sub-pixel rendering
+    // FIX (Android):
+    // - Non-full: tránh hở wrapper do rounding (cover nhẹ bằng ceil khi cần)
+    // - Full: canh giữa (translate) theo vùng hiển thị container
     // ============================================================
     let isFull = false;
     let resizeRAF = null;
 
     const updateScale = () => {
-      const cw = container.clientWidth || width;
-      let scale = cw / width;
+      const rect = container.getBoundingClientRect();
+      const cw = rect.width || container.clientWidth || width;
+      const ch = rect.height || container.clientHeight || height;
 
       if (isFull) {
-        const vw = window.innerWidth || cw;
-        const vh = window.innerHeight || (cw * (height / width));
-        scale = Math.min(vw / width, vh / height);
+        // FULLSCREEN: fit trong vùng hiển thị & canh giữa
+        let scale = Math.min(cw / width, ch / height);
+        if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+
+        // Không vượt quá để tránh crop (dùng floor)
+        const roundedScale = Math.floor(scale * 1000) / 1000 || 1;
+
+        const scaledW = width * roundedScale;
+        const scaledH = height * roundedScale;
+
+        // Canh giữa (integer px để tránh blur)
+        const dx = Math.round((cw - scaledW) / 2);
+        const dy = Math.round((ch - scaledH) / 2);
+
+        wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${roundedScale})`;
+        return;
       }
 
+      // EMBED (non-full)
+      let scale = cw / width;
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
-      // FIX TEXT BLUR: Round scale to 3 decimal places để giảm sub-pixel issues
-      // Và dùng scale3d thay vì scale để force GPU compositing đúng cách
-      const roundedScale = Math.round(scale * 1000) / 1000;
-      
-      // FIX: Dùng transform không có translateZ để tránh blur
-      // translateZ(0) force GPU layer nhưng gây blur text
-      wrapper.style.transform = `scale(${roundedScale})`;
+      // Rounding để giảm blur
+      let roundedScale = Math.round(scale * 1000) / 1000 || 1;
 
-      // fallback khi aspect-ratio không hoạt động
-      if (!isFull) {
+      if (isAndroid && isMobile) {
+        // ANDROID FIX 1: đảm bảo wrapper không bị "thiếu" so với border do rounding xuống
+        const idealH = (height / width) * cw;
+        const underW = (width * roundedScale) < (cw - 0.5);
+        const underH = (height * roundedScale) < (idealH - 0.5);
+
+        if (underW || underH) {
+          // cover nhẹ (<= 0.001) để không hở viền; overflow:hidden sẽ cắt gọn
+          roundedScale = Math.ceil(scale * 1000) / 1000 || 1;
+        }
+
+        wrapper.style.transform = `scale(${roundedScale})`;
+
+        // ANDROID FIX 1 (tiếp): set height theo roundedScale để khít tuyệt đối (tránh hở đáy)
+        container.style.height = `${Math.round(height * roundedScale)}px`;
+      } else {
+        wrapper.style.transform = `scale(${roundedScale})`;
+
+        // fallback khi aspect-ratio không hoạt động
         container.style.height = `${cw * (height / width)}px`;
       }
     };
@@ -679,8 +715,7 @@ ${content}
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-      
-      // FIX TEXT BLUR: Thêm delay nhỏ để browser render lại đúng
+
       requestAnimationFrame(() => {
         updateScale();
       });
