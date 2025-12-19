@@ -1,8 +1,8 @@
 // piai-embed-engine.js
-// v3.7.0 – STRICT SEPARATION EDITION
-// 1. Standard Content: Full UI (Header, Icons, Footer, Padding).
-// 2. Minigame: Zero UI (No Header, No Footer, No Padding) - Just a scalable container.
-// 3. Logic: Auto-API, Auth, Bridge included for Minigames.
+// v3.7.1 – SHARP EDITION (Native Scaling for Games)
+// 1. Minigame: Dùng Native Responsive (Nét căng, không scale).
+// 2. Standard: Dùng Transform Scale (Chuẩn layout).
+// 3. Logic: Auto-API, Auth, Bridge.
 
 (function (global) {
   'use strict';
@@ -15,11 +15,10 @@
     educational: { name: 'educational', primary: '#2196F3', accent: '#FFC107', secondary: '#4CAF50', bg: '#FFFFFF', text: '#212121', textLight: '#757575' },
     night: { name: 'night', primary: '#A1C2BD', accent: '#1D24CA', secondary: '#A8A1CE', bg: '#19183B', text: '#F9E8C9', textLight: '#9BA4B5' },
   };
-  const THEME_ORDER = ['classic', 'educational', 'night'];
-
+  
   const DEFAULT_CONFIG = {
-    width: 800, height: 450, aspect: '16 / 9', themeName: 'classic', headExtra: '', fitMode: 'scroll',
-    branding: true, debug: false
+    width: 800, height: 450, aspect: '16 / 9', themeName: 'classic', fitMode: 'scroll',
+    debug: false
   };
 
   const SYSTEM_FONT_STACK = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif';
@@ -30,10 +29,11 @@
   // ============================================================
   function detectDevice() {
     const ua = navigator.userAgent || '';
-    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-    const isAndroid = /Android/i.test(ua);
-    const isMobile = isIOS || /Mobi|Android/i.test(ua);
-    return { isIOS, isAndroid, isMobile };
+    return { 
+      isIOS: /iPad|iPhone|iPod/.test(ua) && !window.MSStream,
+      isAndroid: /Android/i.test(ua),
+      isMobile: /Mobi|Android/i.test(ua)
+    };
   }
   function getThemeByName(name) { return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName]; }
   function normalizeFitMode(mode) {
@@ -42,38 +42,28 @@
   }
 
   // ============================================================
-  // 3) CSS GENERATOR (STANDARD + MINIMAL GAME SUPPORT)
+  // 3) CSS GENERATOR
   // ============================================================
   function getBaseCss(theme) {
     return `:root{--piai-primary:${theme.primary};--piai-accent:${theme.accent};--piai-secondary:${theme.secondary};--piai-bg:${theme.bg};--piai-text:${theme.text};--piai-text-light:${theme.textLight}}*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%}body{font-family:${SYSTEM_FONT_STACK};color:var(--piai-text);background:transparent;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}.piai-wrap{width:100%;height:100%;background:var(--piai-bg);display:flex;flex-direction:column;overflow:hidden;position:relative;isolation:isolate}
-/* Standard Header */
+/* STANDARD UI (THEORY) */
 .piai-hdr{background:var(--piai-primary);color:#fff;padding:12px 20px;padding-right:130px;font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.2;border-bottom:3px solid var(--piai-accent);position:relative}
 .piai-hdr svg{width:20px;height:20px;display:block;flex:0 0 auto}
-/* Standard Body */
 .piai-body{flex:1;padding:15px 20px;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:1}
 .piai-body>*{margin-bottom:15px}.piai-body>*:last-child{margin-bottom:0}
 .piai-body::-webkit-scrollbar{width:6px}.piai-body::-webkit-scrollbar-thumb{background:var(--piai-text-light);border-radius:3px}
-/* MINIGAME MODE: PURE CONTAINER */
-.piai-game-container{width:100%;height:100%;overflow:hidden;position:relative;display:block}
+/* MINIGAME UI (FULLSCREEN) */
+.piai-body.no-pad{padding:0!important;overflow:hidden!important;width:100%;height:100%}
 iframe.game-frame{border:none;width:100%;height:100%;display:block}
-/* Components (Standard Only) */
-.piai-def{background:var(--piai-bg);border-left:5px solid var(--piai-primary);padding:12px 18px;border-radius:0 8px 8px 0;transition:box-shadow .25s ease,border-color .25s ease}.piai-def:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1)}.piai-def-title{color:var(--piai-primary);font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.25;margin-bottom:6px}.piai-def-content{line-height:1.5;font-size:.95rem}
-.piai-grid{display:flex;flex:1;min-height:0}.piai-grid>*{margin-right:20px}.piai-grid>*:last-child{margin-right:0}
-.piai-list{flex:1;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;position:relative;list-style:none;padding-right:26px;padding-left:6px;min-height:0}
-.piai-list-item{position:relative;z-index:0;display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:8px;background:var(--piai-bg);border:1px solid transparent;border-radius:10px;background-clip:padding-box;box-shadow:inset 0 0 0 1px var(--piai-text-light);font-size:.9rem;line-height:1.45;transition:box-shadow .18s ease}.piai-list-item:last-child{margin-bottom:0}.piai-list-item:hover{box-shadow:inset 0 0 0 2px var(--piai-accent),0 2px 8px rgba(0,0,0,0.08)}
-.piai-list-item .piai-ico{color:var(--piai-accent);width:24px;height:24px;flex:0 0 24px;display:flex;align-items:center;justify-content:center}.piai-list-item .piai-ico svg{width:22px;height:22px;display:block;transition:transform .18s ease}.piai-list-item:hover .piai-ico svg{transform:scale(1.22) rotate(8deg)}.piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}.piai-list-item strong{color:var(--piai-primary)}
-.piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}.piai-visual svg{max-width:100%;max-height:100%}
-/* Controls (Standard Only) */
-.hdr-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:999;width:48px;height:48px;background:transparent;border:none;cursor:pointer;color:var(--piai-accent);display:flex;align-items:center;justify-content:center;transition:color .2s ease}.hdr-btn:hover{color:#fff}.hdr-btn svg{width:26px;height:26px;display:block;transition:transform .2s ease}.hdr-btn:hover svg{transform:scale(1.1)}.fs-btn{right:0}.theme-btn{right:58px}
-/* Loader */
+/* COMPONENTS */
+.piai-def{background:var(--piai-bg);border-left:5px solid var(--piai-primary);padding:12px 18px;border-radius:0 8px 8px 0;transition:box-shadow .25s ease}.piai-def-title{color:var(--piai-primary);font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.25;margin-bottom:6px}.piai-grid{display:flex;flex:1;min-height:0;gap:20px}.piai-list{flex:1;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;padding-right:26px;padding-left:6px}.piai-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:8px;background:var(--piai-bg);border-radius:10px;box-shadow:inset 0 0 0 1px var(--piai-text-light);transition:box-shadow .18s ease}.piai-list-item:hover{box-shadow:inset 0 0 0 2px var(--piai-accent),0 2px 8px rgba(0,0,0,0.08)}.piai-list-item .piai-ico{color:var(--piai-accent);width:24px;height:24px;flex:0 0 24px;display:flex;align-items:center;justify-content:center}.piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}
+/* UTILS */
+.hdr-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:999;width:48px;height:48px;background:transparent;border:none;cursor:pointer;color:var(--piai-accent);display:flex;align-items:center;justify-content:center;transition:color .2s ease}.hdr-btn:hover{color:#fff}.fs-btn{right:0}.theme-btn{right:58px}
 .piai-loader{position:absolute;inset:0;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:opacity .3s ease,visibility .3s ease}.piai-loader.hide{opacity:0;visibility:hidden}.piai-loader .loader-inner{padding:14px 28px;border-radius:30px;background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.5);box-shadow:0 8px 32px 0 rgba(31,38,135,0.15);display:flex;align-items:center;gap:12px}.spinner{width:24px;height:24px;border:3px solid transparent;border-top-color:var(--piai-primary,#007bff);border-right-color:var(--piai-primary,#007bff);border-radius:50%;animation:spin .8s linear infinite}.loader-text{font-size:.9rem;font-weight:600;color:#333}@keyframes spin{to{transform:rotate(360deg)}}
-/* Brand (Standard Only) */
 .piai-brand{position:absolute;right:-20px;bottom:12px;width:96px;height:26px;background:var(--piai-primary);opacity:.95;pointer-events:none;z-index:10;-webkit-mask-image:url("https://piai-embed-engine.vercel.app/public/logo.svg");-webkit-mask-repeat:no-repeat;-webkit-mask-position:left center;-webkit-mask-size:contain;mask-image:url("https://piai-embed-engine.vercel.app/public/logo.svg");mask-repeat:no-repeat;mask-position:left center;mask-size:contain}
-/* Fit Mode */
-.piai-fit-noscroll .piai-body{overflow:hidden!important}.piai-fit-noscroll .piai-def{margin-bottom:8px!important}.piai-fit-noscroll .piai-def-title{font-size:14px!important}.piai-fit-noscroll .piai-def-content{font-size:13px!important;line-height:1.25!important}.piai-fit-noscroll .piai-grid{display:flex!important;gap:12px!important;align-items:stretch!important;overflow:hidden!important;min-height:0!important;flex:1 1 auto!important}.piai-fit-noscroll .piai-grid>*{margin-right:0!important}.piai-fit-noscroll .piai-list{flex:1 1 auto!important;min-width:0!important;overflow:hidden!important;padding-right:0!important}.piai-fit-noscroll .piai-list-item{padding:9px 11px!important;margin:0 0 8px 0!important}.piai-fit-noscroll .piai-list-item>div{min-width:0;font-size:13px!important;line-height:1.25!important}.piai-fit-noscroll .piai-list-item strong{display:inline-block;margin-bottom:2px}.piai-fit-noscroll .piai-visual{width:270px;max-width:270px;overflow:hidden;flex:0 0 auto}.piai-fit-noscroll .piai-visual svg{width:100%;height:auto;display:block}
 /* MathJax */
 .MathJax,.MathJax_Display,.MathJax svg,mjx-container,mjx-container svg{image-rendering:-webkit-optimize-contrast;-webkit-font-smoothing:antialiased;shape-rendering:geometricPrecision;text-rendering:geometricPrecision}.MathJax,mjx-container{transform:none!important;backface-visibility:visible!important}
-@media (max-width:650px){.piai-grid{flex-direction:column}.piai-grid>*{margin-right:0;margin-bottom:16px}.piai-grid>*:last-child{margin-bottom:0}.piai-visual{flex:0 0 auto;padding:10px;width:100%}.piai-hdr{padding:10px 16px;padding-right:130px}.piai-fit-noscroll .piai-visual{width:100%;max-width:100%}}`;
+@media (max-width:650px){.piai-grid{flex-direction:column}.piai-visual{flex:0 0 auto;padding:10px;width:100%}}`;
   }
 
   function buildHtmlDocument(content, baseCss, headExtra) {
@@ -108,19 +98,16 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         debug: config.debug || false
     };
 
-    // API Path
     const apiPath = PARENT_DATA.isStudio ? "https://pistudy.vn/api/minigames/" : "/api/minigames/";
     const apiBase = apiPath.startsWith('http') ? apiPath : (PARENT_DATA.origin + apiPath);
     const safeCookie = PARENT_DATA.cookie.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
 
-    // --- HTML TEMPLATE (PURE DIV) ---
     return `
-    <div class="piai-game-container">
-      <div class="piai-loader" id="loader">
-        <div class="loader-inner"><div class="spinner"></div><div class="loader-text">Đang tải...</div></div>
-      </div>
-      
-      <iframe class="game-frame" src="${PARENT_DATA.gameUrl}" allow="autoplay; encrypted-media; fullscreen"></iframe>
+    <div class="piai-wrap" style="background: transparent;">
+      <div class="piai-loader" id="loader"><div class="loader-inner"><div class="spinner"></div><div class="loader-text">Đang tải...</div></div></div>
+      <main class="piai-body no-pad">
+        <iframe class="game-frame" src="${PARENT_DATA.gameUrl}" allow="autoplay; encrypted-media; fullscreen"></iframe>
+      </main>
     </div>
     
     <script>
@@ -164,7 +151,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       const iframe = document.querySelector('iframe.game-frame'), loader = document.getElementById('loader');
       iframe.onload = () => setTimeout(() => loader.classList.add('hide'), 500);
 
-      // Listen for Game Messages
       window.addEventListener('message', (e) => {
          if(e.origin !== new URL(CFG.gameUrl).origin) return;
          const msg = e.data;
@@ -188,21 +174,12 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
   // ============================================================
   function render(options) {
     const config = Object.assign({}, DEFAULT_CONFIG, options || {});
-    
-    // Auto-detect Mode
-    let isMinigame = !!config.gameUrl;
+    const isMinigame = !!config.gameUrl;
     
     // Default theme for minigames
-    if (isMinigame && (!options.themeName && !options.theme)) {
-        config.themeName = 'educational'; 
-    }
+    if (isMinigame && (!options.themeName && !options.theme)) config.themeName = 'educational'; 
 
-    const {
-      id, container: cNode, width, height, aspect,
-      themeName, theme: tOverride, html, htmlGenerator,
-      headExtra, onReady, onThemeChange, fitMode
-    } = config;
-
+    const { id, container: cNode, width, height, aspect, themeName, theme: tOverride, html, htmlGenerator, headExtra, onReady, onThemeChange, fitMode } = config;
     const container = cNode || (typeof id === 'string' ? document.getElementById(id) : null);
     if (!container) return;
 
@@ -220,17 +197,25 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     container.style.cssText = baseStyle.default;
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = `position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform-origin:0 0;`;
+    
+    // ======================================================
+    // LOGIC TÁCH BIỆT: GAME (NATIVE) vs THEORY (SCALE)
+    // ======================================================
+    if (isMinigame) {
+        // --- GAME: Full Size, No Scale (Nét căng) ---
+        wrapper.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;`;
+    } else {
+        // --- THEORY: Fixed 800x450, Scale Transform ---
+        wrapper.style.cssText = `position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform-origin:0 0;`;
+    }
 
     const ctxBase = { id: containerId, embedId: containerId, width, height, aspect, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
 
     // --- GENERATOR SWITCH ---
     let finalHtml = '';
     if (isMinigame) {
-        // CASE 1: GAME (DIV RỖNG + API)
         finalHtml = generateMinigameHTML(ctxBase, config);
     } else {
-        // CASE 2: THEORY (FULL UI + HEADER + FOOTER)
         const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html || '';
         finalHtml = generator(Object.assign({}, ctxBase, { isStandalone: false }));
     }
@@ -242,7 +227,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     if (!finalHtml) return;
     const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
 
-    // iOS Standalone URL (Chỉ tạo cho Lý thuyết, Game không cần)
+    // iOS Standalone URL (Chỉ cho Theory)
     let iosStandaloneUrl = '';
     if (isIOS && !isMinigame) {
       const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
@@ -255,7 +240,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     const blobUrl = URL.createObjectURL(new Blob([iframeHtml], { type: 'text/html' }));
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
-    // Game: trong suốt hoàn toàn / Lý thuyết: có màu nền theme
     iframe.style.cssText = `width:100%;height:100%;border:none;display:block;background:${isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5')};`;
     iframe.scrolling = 'no';
     iframe.loading = 'lazy';
@@ -270,7 +254,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     };
 
     // ============================================================
-    // 6) SCALING & EVENTS (Shared Logic)
+    // 6) EVENTS & SCALING
     // ============================================================
     let isFull = false;
     let resizeRAF = null;
@@ -279,7 +263,9 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       const rect = container.getBoundingClientRect();
       const cw = rect.width || container.clientWidth || width;
       const ch = rect.height || container.clientHeight || height;
+
       if (isFull) {
+        // Fullscreen: Scale to fit viewport center
         let scale = Math.min(cw / width, ch / height);
         if (!Number.isFinite(scale) || scale <= 0) scale = 1;
         const roundedScale = Math.floor(scale * 1000) / 1000 || 1;
@@ -287,17 +273,28 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         const dy = Math.round((ch - height * roundedScale) / 2);
         wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${roundedScale})`;
       } else {
-        let scale = cw / width;
-        if (!Number.isFinite(scale) || scale <= 0) scale = 1;
-        let roundedScale = Math.round(scale * 1000) / 1000 || 1;
-        if (isAndroid && isMobile) {
-          const idealH = (height / width) * cw;
-          if ((width * roundedScale) < (cw - 0.5) || (height * roundedScale) < (idealH - 0.5)) roundedScale = Math.ceil(scale * 1000) / 1000 || 1;
-          wrapper.style.transform = `scale(${roundedScale})`;
-          container.style.height = `${Math.round(height * roundedScale)}px`;
+        // Embed Mode
+        if (isMinigame) {
+            // GAME: Fluid / Responsive (No Transform) -> Nét căng
+            wrapper.style.transform = 'none';
+            wrapper.style.width = '100%';
+            wrapper.style.height = '100%';
+            // Tính height dựa trên width để giữ tỷ lệ 16:9 cho container
+            container.style.height = `${cw * (9/16)}px`;
         } else {
-          wrapper.style.transform = `scale(${roundedScale})`;
-          container.style.height = `${cw * (height / width)}px`;
+            // THEORY: Transform Scale (Giữ layout chuẩn)
+            let scale = cw / width;
+            if (!Number.isFinite(scale) || scale <= 0) scale = 1;
+            let roundedScale = Math.round(scale * 1000) / 1000 || 1;
+            if (isAndroid && isMobile) {
+              const idealH = (height / width) * cw;
+              if ((width * roundedScale) < (cw - 0.5) || (height * roundedScale) < (idealH - 0.5)) roundedScale = Math.ceil(scale * 1000) / 1000 || 1;
+              wrapper.style.transform = `scale(${roundedScale})`;
+              container.style.height = `${Math.round(height * roundedScale)}px`;
+            } else {
+              wrapper.style.transform = `scale(${roundedScale})`;
+              container.style.height = `${cw * (height / width)}px`;
+            }
         }
       }
     };
@@ -388,7 +385,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
   // 7) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.7.0',
+    version: '3.7.1',
     render,
     themes: THEMES,
     getThemeByName,
