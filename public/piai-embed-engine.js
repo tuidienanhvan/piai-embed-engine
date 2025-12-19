@@ -1,9 +1,8 @@
 // piai-embed-engine.js
+// v3.6.0 – UNIFIED: Tích hợp logic Minigame (Auth/API/Bridge) trực tiếp vào render()
 // v3.5.0 – FIX: logo positioning + text blur on hover/fullscreen
 // Giữ: fullscreen desktop, iOS standalone (mở tab), scale mượt, không memory leak
-// FIX (Android):
-// 1) Wrapper khít với border div nhúng (tránh hở do rounding scale)
-// 2) Fullscreen align center (canh giữa chuẩn trên Android)
+// FIX (Android): Wrapper khít border, Fullscreen align center
 
 (function (global) {
   'use strict';
@@ -49,8 +48,7 @@
     aspect: '16 / 9',
     themeName: 'classic',
     headExtra: '',
-    // 'scroll' (default) | 'no-scroll' | 'compact'
-    fitMode: 'scroll',
+    fitMode: 'scroll', // 'scroll' | 'no-scroll' | 'compact'
   };
 
   const SYSTEM_FONT_STACK =
@@ -82,8 +80,6 @@
   }
 
   // Base CSS trong iframe
-  // FIX 1: Logo positioning - đảm bảo nằm trong .piai-wrap với overflow visible cho logo
-  // FIX 2: Text blur - loại bỏ transform trên text elements, dùng box-shadow thay vì transform cho hover
   function getBaseCss(theme) {
     return `:root{
   --piai-primary:${theme.primary};
@@ -100,7 +96,6 @@ body{
   color:var(--piai-text);
   background:transparent;
   overflow:hidden;
-  /* FIX TEXT BLUR: Force better text rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -113,11 +108,10 @@ body{
   flex-direction:column;
   overflow:hidden;
   position:relative;
-  /* FIX TEXT BLUR: Isolation context để tránh blur từ parent transforms */
   isolation: isolate;
 }
 
-/* ========== HEADER (align icon + text) ========== */
+/* ========== HEADER ========== */
 .piai-hdr{
   background:var(--piai-primary);
   color:#fff;
@@ -142,10 +136,13 @@ body{
   display:flex;
   flex-direction:column;
   min-height:0;
-  /* FIX TEXT BLUR: Tạo stacking context riêng */
   position: relative;
   z-index: 1;
 }
+/* Special class for Minigames to remove padding */
+.piai-body.no-pad { padding: 0 !important; overflow: hidden !important; }
+iframe.game-frame { border: none; width: 100%; flex: 1; display: block; }
+
 .piai-body>*{margin-bottom:15px}
 .piai-body>*:last-child{margin-bottom:0}
 .piai-body::-webkit-scrollbar{width:6px}
@@ -154,7 +151,7 @@ body{
   border-radius:3px;
 }
 
-/* Def box - FIX: Loại bỏ transform, dùng box-shadow cho hover effect */
+/* Def box */
 .piai-def{
   background:var(--piai-bg);
   border-left:5px solid var(--piai-primary);
@@ -182,7 +179,7 @@ body{
 .piai-grid>*{margin-right:20px}
 .piai-grid>*:last-child{margin-right:0}
 
-/* ========== LIST - FIX TEXT BLUR ========== */
+/* ========== LIST ========== */
 .piai-list{
   flex:1;
   display:flex;
@@ -196,8 +193,6 @@ body{
   padding-left:6px;
   min-height:0;
 }
-
-/* Item: FIX - Loại bỏ transform, chỉ dùng box-shadow cho hover */
 .piai-list-item{
   position:relative;
   z-index:0;
@@ -206,31 +201,19 @@ body{
   gap:12px;
   padding:12px 16px;
   margin-bottom:8px;
-
   background:var(--piai-bg);
-
   border:1px solid transparent;
   border-radius:10px;
   background-clip:padding-box;
   box-shadow: inset 0 0 0 1px var(--piai-text-light);
-
   font-size:.9rem;
   line-height:1.45;
-
-  /* FIX TEXT BLUR: Chỉ transition box-shadow, KHÔNG dùng transform */
   transition: box-shadow .18s ease;
-  
-  /* REMOVED: Những dòng này gây blur text khi scale
-  transform:translateZ(0);
-  backface-visibility:hidden;
-  */
 }
 .piai-list-item:last-child{margin-bottom:0}
 .piai-list-item:hover{
   box-shadow: inset 0 0 0 2px var(--piai-accent), 0 2px 8px rgba(0,0,0,0.08);
 }
-
-/* Icon trong list item - FIX: Transform chỉ cho icon SVG, không ảnh hưởng text */
 .piai-list-item .piai-ico{
   color:var(--piai-accent);
   width:24px;height:24px;
@@ -238,7 +221,6 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
-  /* Icon có thể transform vì không chứa text */
 }
 .piai-list-item .piai-ico svg{
   width:22px;height:22px;display:block;
@@ -260,30 +242,19 @@ body{
   top:50%;
   transform:translateY(-50%);
   z-index:999;
-
   width:48px;height:48px;
   background:transparent;
   border:none;
   cursor:pointer;
   color:var(--piai-accent);
-
   display:flex;
   align-items:center;
   justify-content:center;
-
   transition: color .2s ease;
 }
-.hdr-btn:hover{
-  color:#fff;
-}
-/* Separate transform for button hover - icon only */
-.hdr-btn svg{
-  width:26px;height:26px;display:block;
-  transition: transform .2s ease;
-}
-.hdr-btn:hover svg{
-  transform: scale(1.1);
-}
+.hdr-btn:hover{ color:#fff; }
+.hdr-btn svg{ width:26px;height:26px;display:block; transition: transform .2s ease; }
+.hdr-btn:hover svg{ transform: scale(1.1); }
 .fs-btn{right:0}
 .theme-btn{right:58px}
 
@@ -317,140 +288,47 @@ body{
 .loader-text{font-size:.9rem;font-weight:600;color:#333}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ===========================
-   EX BOX (Ví dụ) styles
-   =========================== */
+/* EX BOX */
 .ex-box{
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed rgba(0,0,0,.12);
-  display:flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 0.95em;
-  color: var(--piai-text);
-  min-width:0;
+  margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,.12);
+  display:flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 0.95em; color: var(--piai-text); min-width:0;
 }
 .ex-tag{
-  font-weight: 700;
-  font-size: 8px;
-  line-height: 1.2;
-  color: #fff;
-  background: var(--piai-secondary);
-  padding: 2px 6px;
-  border-radius: 2px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  flex: 0 0 auto;
+  font-weight: 700; font-size: 8px; line-height: 1.2; color: #fff; background: var(--piai-secondary);
+  padding: 2px 6px; border-radius: 2px; text-transform: uppercase; white-space: nowrap; flex: 0 0 auto;
 }
-.ex-box > span:last-child{
-  font-size: 12px;
-  line-height: 1.45;
-  min-width: 0;
-  word-break: break-word;
-}
+.ex-box > span:last-child{ font-size: 12px; line-height: 1.45; min-width: 0; word-break: break-word; }
 
-/* ===========================
-   FIX 1: BRAND LOGO POSITIONING
-   - Phải nằm trực tiếp trong .piai-wrap
-   - Dùng calc() để đảm bảo vị trí chính xác
-   =========================== */
+/* BRAND LOGO */
 .piai-brand{
-  position: absolute;
-  /* FIX: Dùng calc để đảm bảo vị trí, right: -2px có thể bị clip */
-  right: -20px;
-  bottom: 12px;
-  width: 96px;
-  height: 26px;
-  background: var(--piai-primary);
-  opacity: .95;
-  pointer-events: none;
-  /* FIX: Đảm bảo logo không bị ảnh hưởng bởi parent overflow */
-  z-index: 10;
-
+  position: absolute; right: -20px; bottom: 12px; width: 96px; height: 26px;
+  background: var(--piai-primary); opacity: .95; pointer-events: none; z-index: 10;
   -webkit-mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: left center;
-  -webkit-mask-size: contain;
-
+  -webkit-mask-repeat: no-repeat; -webkit-mask-position: left center; -webkit-mask-size: contain;
   mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
-  mask-repeat: no-repeat;
-  mask-position: left center;
-  mask-size: contain;
+  mask-repeat: no-repeat; mask-position: left center; mask-size: contain;
 }
 
-/* ==========================================
-   FIT MODE (no-scroll / compact) OPT-IN
-   ========================================== */
+/* FIT MODE */
 .piai-fit-noscroll .piai-body{ overflow:hidden !important; }
 .piai-fit-noscroll .piai-def{ margin-bottom: 8px !important; }
 .piai-fit-noscroll .piai-def-title{ font-size: 14px !important; }
 .piai-fit-noscroll .piai-def-content{ font-size: 13px !important; line-height: 1.25 !important; }
-
-.piai-fit-noscroll .piai-grid{
-  display:flex !important;
-  gap: 12px !important;
-  align-items: stretch !important;
-  overflow: hidden !important;
-  min-height: 0 !important;
-  flex: 1 1 auto !important;
-}
+.piai-fit-noscroll .piai-grid{ display:flex !important; gap: 12px !important; align-items: stretch !important; overflow: hidden !important; min-height: 0 !important; flex: 1 1 auto !important; }
 .piai-fit-noscroll .piai-grid>*{ margin-right: 0 !important; }
-.piai-fit-noscroll .piai-list{
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  overflow: hidden !important;
-  padding-right: 0 !important;
-}
-.piai-fit-noscroll .piai-list-item{
-  padding: 9px 11px !important;
-  margin: 0 0 8px 0 !important;
-}
-.piai-fit-noscroll .piai-list-item > div{
-  min-width: 0;
-  font-size: 13px !important;
-  line-height: 1.25 !important;
-}
-.piai-fit-noscroll .piai-list-item strong{
-  display:inline-block;
-  margin-bottom: 2px;
-}
-.piai-fit-noscroll .piai-visual{
-  width: 270px;
-  max-width: 270px;
-  overflow: hidden;
-  flex: 0 0 auto;
-}
-.piai-fit-noscroll .piai-visual svg{
-  width:100%;
-  height:auto;
-  display:block;
-}
+.piai-fit-noscroll .piai-list{ flex: 1 1 auto !important; min-width: 0 !important; overflow: hidden !important; padding-right: 0 !important; }
+.piai-fit-noscroll .piai-list-item{ padding: 9px 11px !important; margin: 0 0 8px 0 !important; }
+.piai-fit-noscroll .piai-list-item > div{ min-width: 0; font-size: 13px !important; line-height: 1.25 !important; }
+.piai-fit-noscroll .piai-list-item strong{ display:inline-block; margin-bottom: 2px; }
+.piai-fit-noscroll .piai-visual{ width: 270px; max-width: 270px; overflow: hidden; flex: 0 0 auto; }
+.piai-fit-noscroll .piai-visual svg{ width:100%; height:auto; display:block; }
 
-/* ==========================================
-   FIX 2: MATHJAX & TEXT CLARITY
-   Force crisp rendering cho MathJax elements
-   ========================================== */
-.MathJax,
-.MathJax_Display,
-.MathJax svg,
-mjx-container,
-mjx-container svg {
-  /* Prevent blurry rendering */
-  image-rendering: -webkit-optimize-contrast;
-  -webkit-font-smoothing: antialiased;
-  /* Force pixel-perfect rendering */
-  shape-rendering: geometricPrecision;
-  text-rendering: geometricPrecision;
+/* MATHJAX FIX */
+.MathJax, .MathJax_Display, .MathJax svg, mjx-container, mjx-container svg {
+  image-rendering: -webkit-optimize-contrast; -webkit-font-smoothing: antialiased;
+  shape-rendering: geometricPrecision; text-rendering: geometricPrecision;
 }
-
-/* Ensure MathJax containers don't inherit problematic transforms */
-.MathJax,
-mjx-container {
-  transform: none !important;
-  backface-visibility: visible !important;
-}
+.MathJax, mjx-container { transform: none !important; backface-visibility: visible !important; }
 
 @media (max-width:650px){
   .piai-grid{flex-direction:column}
@@ -458,11 +336,7 @@ mjx-container {
   .piai-grid>*:last-child{margin-bottom:0}
   .piai-visual{flex:0 0 auto;padding:10px;width:100%}
   .piai-hdr{padding:10px 16px;padding-right:130px}
-
-  .piai-fit-noscroll .piai-visual{
-    width: 100%;
-    max-width: 100%;
-  }
+  .piai-fit-noscroll .piai-visual{ width: 100%; max-width: 100%; }
 }`;
   }
 
@@ -498,7 +372,6 @@ ${content}
   // CSS container: radius clean
   function createBaseStyle(theme, aspect) {
     const borderCol = (theme.primary || '#800020') + '26';
-
     return {
       default:
         `width:100%;max-width:100%;display:block;position:relative;` +
@@ -519,10 +392,137 @@ ${content}
   }
 
   // ============================================================
-  // 3) RENDER
+  // 3) MINIGAME GENERATOR (LOGIC TÍCH HỢP CHO V3.6.0)
+  // ============================================================
+  function generateMinigameHTML(ctx, config) {
+    // 1. Capture Data from Parent Environment
+    const PARENT_DATA = {
+        cookie: document.cookie || '',
+        origin: window.location.origin,
+        isStudio: window.location.hostname.includes('studio'),
+        gameKey: config.gameKey || 'unknown-game',
+        gameUrl: config.gameUrl,
+        gameOrigin: config.gameOrigin || new URL(config.gameUrl).origin
+    };
+
+    // Calculate Absolute API URL (Blob cannot use relative paths)
+    const apiPath = PARENT_DATA.isStudio ? "https://pistudy.vn/api/minigames/" : "/api/minigames/";
+    const apiBase = apiPath.startsWith('http') ? apiPath : (PARENT_DATA.origin + apiPath);
+    // Escape string for safe injection
+    const safeCookie = PARENT_DATA.cookie.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
+
+    return `
+    <div class="piai-wrap">
+      <div class="piai-loader" id="loader">
+        <div class="loader-inner"><div class="spinner"></div><div class="loader-text">Đang tải trò chơi...</div></div>
+      </div>
+      <header class="piai-hdr">
+        <i data-lucide="gamepad-2"></i><span>${config.title || 'Trò chơi'}</span>
+        <button class="hdr-btn fs-btn" id="fsBtn" title="Phóng to"><i data-lucide="maximize"></i></button>
+      </header>
+      <main class="piai-body no-pad">
+        <iframe class="game-frame" src="${PARENT_DATA.gameUrl}" allow="autoplay; encrypted-media; fullscreen"></iframe>
+      </main>
+      <div class="piai-brand"></div>
+    </div>
+    
+    <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.min.js"><\/script>
+    <script>
+    (function(){
+      // --- A. INJECTED CONFIG ---
+      const CFG = {
+         cookies: \`${safeCookie}\`,
+         apiBase: "${apiBase}",
+         gameKey: "${PARENT_DATA.gameKey}",
+         gameUrl: "${PARENT_DATA.gameUrl}",
+         isStudio: ${PARENT_DATA.isStudio}
+      };
+
+      // --- B. INTERNAL LOGIC: AUTH & API (Runs inside Blob) ---
+      function getCookie(n) { let v = CFG.cookies.match('(^|;) ?' + n + '=([^;]*)(;|$)'); return v ? v[2] : null; }
+      
+      function getUser() {
+          let u = { name: "Khách", username: "guest" };
+          try {
+             let jwt = getCookie("edx-jwt-cookie-header-payload");
+             if(jwt) { let p = JSON.parse(atob(jwt.split(".")[1])); u.name=p.name||p.preferred_username; u.username=p.preferred_username; return u; }
+             let old = getCookie("edx-user-info");
+             if(old) { let i = JSON.parse(old.replace(/^"|"$/g,'').split('\\\\054').join(',').split('\\\\\\\\').join('')); u.name=i.username; u.username=i.username; return u; }
+          } catch(e){}
+          return u;
+      }
+
+      async function fetchStats() {
+          if(CFG.isStudio) return {playCount:0,bestScore:0};
+          try {
+             let r = await fetch(CFG.apiBase+"logs/");
+             if(!r.ok) return {playCount:0,bestScore:0};
+             let d = await r.json(), rows = Array.isArray(d)?d:(d.results||[]), pc=0, bs=0;
+             rows.forEach(x=>{ if(x.payload?.gameKey===CFG.gameKey){ pc++; let s=Number(x.payload.score||0); if(s>bs)bs=s; }});
+             return {playCount:pc, bestScore:bs};
+          } catch(e){ return {playCount:0,bestScore:0}; }
+      }
+
+      async function saveResult(p) {
+          if(CFG.isStudio) return true;
+          try {
+             await fetch(CFG.apiBase+"logs/", {
+                 method:"POST", 
+                 headers:{"Content-Type":"application/json","X-CSRFToken":getCookie('csrftoken')||""},
+                 body:JSON.stringify({msgtype:"RESULT",tsms:Date.now(),payload:{...p,userId:null,username:getUser().username}})
+             });
+             return true;
+          } catch(e){ return false; }
+      }
+
+      // --- C. UI & BRIDGE ---
+      if(window.lucide) window.lucide.createIcons();
+      const iframe = document.querySelector('iframe.game-frame'), loader = document.getElementById('loader'), fsBtn = document.getElementById('fsBtn');
+      
+      iframe.onload = () => setTimeout(() => loader.classList.add('hide'), 500);
+
+      if(fsBtn) fsBtn.onclick = () => parent.postMessage({type:'toggleFullscreen',id:'${ctx.id}'}, '*');
+      
+      window.addEventListener('message', (e) => {
+         // Fullscreen Icon
+         if(e.data?.type==='fullscreenState') {
+            fsBtn.innerHTML='<i data-lucide="'+(e.data.isFullscreen?'minimize':'maximize')+'"></i>';
+            if(window.lucide) window.lucide.createIcons();
+         }
+         
+         // BRIDGE LOGIC
+         if(e.origin !== new URL(CFG.gameUrl).origin) return;
+         const msg = e.data;
+         const send = (d) => iframe.contentWindow.postMessage(d, CFG.gameUrl);
+
+         (async () => {
+             if(msg.type==="MINIGAME_READY" || (msg.type==="MINIGAME_ACTION" && msg.action==="REFRESH_STATS")) {
+                 send({type:"MINIGAME_DATA", userName:getUser().name, stats:await fetchStats()});
+             }
+             if(msg.type==="MINIGAME_ACTION" && msg.action==="SAVE_RESULT") {
+                 await saveResult(msg.data);
+                 send({type:"MINIGAME_DATA", userName:getUser().name, stats:await fetchStats()});
+             }
+         })();
+      });
+    })();
+    <\/script>`;
+  }
+
+  // ============================================================
+  // 4) RENDER (UNIFIED)
   // ============================================================
   function render(options) {
     const config = Object.assign({}, DEFAULT_CONFIG, options || {});
+    
+    // DETECT MINIGAME MODE: If 'gameUrl' is present -> Auto-switch
+    let isMinigame = !!config.gameUrl;
+    
+    // If Minigame, override theme defaults if not provided (Prefer Educational)
+    if (isMinigame && (!options.themeName && !options.theme)) {
+        config.themeName = 'educational'; 
+    }
+
     const {
       id,
       container: containerFromConfig,
@@ -570,9 +570,6 @@ ${content}
       `position:absolute;top:0;left:0;` +
       `width:${width}px;height:${height}px;` +
       `transform-origin:0 0;`;
-      // FIX TEXT BLUR: Removed will-change:transform - causes blur on scaled content
-
-    const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
 
     const ctxBase = {
       id: containerId,
@@ -586,24 +583,34 @@ ${content}
       isIOS,
     };
 
+    // GENERATOR SELECTION: Standard vs Minigame
+    let finalHtml = '';
+    if (isMinigame) {
+        finalHtml = generateMinigameHTML(ctxBase, config);
+    } else {
+        const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html || '';
+        finalHtml = generator(Object.assign({}, ctxBase, { isStandalone: false }));
+    }
+
     // fitMode -> inject a tiny script that adds class on <html>
     const fitNorm = normalizeFitMode(fitMode);
     const fitHead =
       fitNorm === 'no-scroll'
         ? `<script>(function(){try{document.documentElement.classList.add('piai-fit-noscroll');}catch(_){}})();<\/script>`
         : '';
-
     const headExtraFinal = (headExtra || '') + fitHead;
 
-    const iframeRaw = generator(Object.assign({}, ctxBase, { isStandalone: false }));
-    if (!iframeRaw) return;
-
-    const iframeHtml = buildHtmlDocument(iframeRaw, baseCss, headExtraFinal);
+    if (!finalHtml) return;
+    const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
 
     // iOS standalone url
     let iosStandaloneUrl = '';
     if (isIOS) {
-      const standaloneRaw = generator(Object.assign({}, ctxBase, { isStandalone: true }));
+      // Note: Minigames usually don't support standalone context well due to bridge logic, 
+      // but we keep the structure for Standard embeds.
+      const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
+      const standaloneRaw = isMinigame ? finalHtml : generator(Object.assign({}, ctxBase, { isStandalone: true }));
+      
       if (standaloneRaw) {
         const standaloneHtml = buildHtmlDocument(standaloneRaw, baseCss, headExtraFinal);
         try {
@@ -627,7 +634,7 @@ ${content}
     iframe.loading = 'lazy';
     iframe.sandbox =
       'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
-    iframe.allow = 'fullscreen; clipboard-read; clipboard-write';
+    iframe.allow = 'fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media';
     if (iosStandaloneUrl) iframe.dataset.iosStandaloneUrl = iosStandaloneUrl;
 
     iframe.onload = function () {
@@ -650,10 +657,7 @@ ${content}
     };
 
     // ============================================================
-    // 4) FULLSCREEN & SCALING
-    // FIX (Android):
-    // - Non-full: tránh hở wrapper do rounding (cover nhẹ bằng ceil khi cần)
-    // - Full: canh giữa (translate) theo vùng hiển thị container
+    // 5) FULLSCREEN & SCALING
     // ============================================================
     let isFull = false;
     let resizeRAF = null;
@@ -667,17 +671,12 @@ ${content}
         // FULLSCREEN: fit trong vùng hiển thị & canh giữa
         let scale = Math.min(cw / width, ch / height);
         if (!Number.isFinite(scale) || scale <= 0) scale = 1;
-
-        // Không vượt quá để tránh crop (dùng floor)
         const roundedScale = Math.floor(scale * 1000) / 1000 || 1;
-
         const scaledW = width * roundedScale;
         const scaledH = height * roundedScale;
-
         // Canh giữa (integer px để tránh blur)
         const dx = Math.round((cw - scaledW) / 2);
         const dy = Math.round((ch - scaledH) / 2);
-
         wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${roundedScale})`;
         return;
       }
@@ -685,28 +684,21 @@ ${content}
       // EMBED (non-full)
       let scale = cw / width;
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
-
-      // Rounding để giảm blur
       let roundedScale = Math.round(scale * 1000) / 1000 || 1;
 
       if (isAndroid && isMobile) {
-        // ANDROID FIX 1: đảm bảo wrapper không bị "thiếu" so với border do rounding xuống
+        // ANDROID FIX 1: tránh hở viền
         const idealH = (height / width) * cw;
         const underW = (width * roundedScale) < (cw - 0.5);
         const underH = (height * roundedScale) < (idealH - 0.5);
-
         if (underW || underH) {
-          // cover nhẹ (<= 0.001) để không hở viền; overflow:hidden sẽ cắt gọn
           roundedScale = Math.ceil(scale * 1000) / 1000 || 1;
         }
-
         wrapper.style.transform = `scale(${roundedScale})`;
-
-        // ANDROID FIX 1 (tiếp): set height theo roundedScale để khít tuyệt đối (tránh hở đáy)
+        // ANDROID FIX 1 (tiếp): set height theo roundedScale
         container.style.height = `${Math.round(height * roundedScale)}px`;
       } else {
         wrapper.style.transform = `scale(${roundedScale})`;
-
         // fallback khi aspect-ratio không hoạt động
         container.style.height = `${cw * (height / width)}px`;
       }
@@ -715,11 +707,9 @@ ${content}
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-
       requestAnimationFrame(() => {
         updateScale();
       });
-
       try {
         iframe.contentWindow && iframe.contentWindow.postMessage(
           { type: 'fullscreenState', id: containerId, isFullscreen: state },
@@ -731,16 +721,13 @@ ${content}
     const switchTheme = () => {
       let idx = THEME_ORDER.indexOf(currentThemeName);
       if (idx < 0) idx = 0;
-
       currentThemeName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
       currentTheme = getThemeByName(currentThemeName);
-
       baseCss = getBaseCss(currentTheme);
       baseStyle = createBaseStyle(currentTheme, aspect);
 
       container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
       iframe.style.background = currentTheme.bg || '#f9f7f5';
-
       updateScale();
 
       try {
@@ -757,14 +744,13 @@ ${content}
     };
 
     // ============================================================
-    // 5) EVENTS + CLEANUP
+    // 6) EVENTS + CLEANUP
     // ============================================================
     const onMessage = (e) => {
       if (!e.data || e.data.id !== containerId) return;
 
       if (e.data.type === 'toggleFullscreen') {
         if (isIOS) return;
-
         if (document.fullscreenElement) {
           document.exitFullscreen();
         } else if (isFull) {
@@ -835,20 +821,14 @@ ${content}
   }
 
   // ============================================================
-  // 6) EXPORT
+  // 7) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.5.0',
+    version: '3.6.0',
     render,
     themes: THEMES,
     getThemeByName,
     getBaseCss,
-    defaults: {
-      width: DEFAULT_CONFIG.width,
-      height: DEFAULT_CONFIG.height,
-      aspect: DEFAULT_CONFIG.aspect,
-      themeName: DEFAULT_CONFIG.themeName,
-      fitMode: DEFAULT_CONFIG.fitMode,
-    },
+    defaults: DEFAULT_CONFIG
   };
 })(window);
