@@ -1,7 +1,8 @@
 // piai-embed-engine.js
-// v3.7.0 – MINIGAME SUPPORT EDITION
-// Base: v3.5.0 (Original Structure & Fixes)
-// New: Minigame Auto-API, Auth Bridge, Header/Branding Toggle.
+// v3.7.0 – STRICT SEPARATION EDITION
+// 1. Standard Content: Full UI (Header, Icons, Footer, Padding).
+// 2. Minigame: Zero UI (No Header, No Footer, No Padding) - Just a scalable container.
+// 3. Logic: Auto-API, Auth, Bridge included for Minigames.
 
 (function (global) {
   'use strict';
@@ -18,10 +19,7 @@
 
   const DEFAULT_CONFIG = {
     width: 800, height: 450, aspect: '16 / 9', themeName: 'classic', headExtra: '', fitMode: 'scroll',
-    // --- New v3.7.0 Options ---
-    header: true,   // Ẩn/Hiện header
-    branding: true, // Ẩn/Hiện logo
-    debug: false    // Log API
+    branding: true, debug: false
   };
 
   const SYSTEM_FONT_STACK = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif';
@@ -44,32 +42,32 @@
   }
 
   // ============================================================
-  // 3) CSS GENERATOR (v3.5.0 + Game Support)
+  // 3) CSS GENERATOR (STANDARD + MINIMAL GAME SUPPORT)
   // ============================================================
   function getBaseCss(theme) {
     return `:root{--piai-primary:${theme.primary};--piai-accent:${theme.accent};--piai-secondary:${theme.secondary};--piai-bg:${theme.bg};--piai-text:${theme.text};--piai-text-light:${theme.textLight}}*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%}body{font-family:${SYSTEM_FONT_STACK};color:var(--piai-text);background:transparent;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}.piai-wrap{width:100%;height:100%;background:var(--piai-bg);display:flex;flex-direction:column;overflow:hidden;position:relative;isolation:isolate}
-/* Header */
+/* Standard Header */
 .piai-hdr{background:var(--piai-primary);color:#fff;padding:12px 20px;padding-right:130px;font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.2;border-bottom:3px solid var(--piai-accent);position:relative}
 .piai-hdr svg{width:20px;height:20px;display:block;flex:0 0 auto}
-/* Body */
+/* Standard Body */
 .piai-body{flex:1;padding:15px 20px;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:1}
 .piai-body>*{margin-bottom:15px}.piai-body>*:last-child{margin-bottom:0}
 .piai-body::-webkit-scrollbar{width:6px}.piai-body::-webkit-scrollbar-thumb{background:var(--piai-text-light);border-radius:3px}
-/* Game Specific (New) */
-.piai-body.no-pad{padding:0!important;overflow:hidden!important}
-iframe.game-frame{border:none;width:100%;flex:1;display:block}
-/* Components */
+/* MINIGAME MODE: PURE CONTAINER */
+.piai-game-container{width:100%;height:100%;overflow:hidden;position:relative;display:block}
+iframe.game-frame{border:none;width:100%;height:100%;display:block}
+/* Components (Standard Only) */
 .piai-def{background:var(--piai-bg);border-left:5px solid var(--piai-primary);padding:12px 18px;border-radius:0 8px 8px 0;transition:box-shadow .25s ease,border-color .25s ease}.piai-def:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1)}.piai-def-title{color:var(--piai-primary);font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.25;margin-bottom:6px}.piai-def-content{line-height:1.5;font-size:.95rem}
 .piai-grid{display:flex;flex:1;min-height:0}.piai-grid>*{margin-right:20px}.piai-grid>*:last-child{margin-right:0}
 .piai-list{flex:1;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;position:relative;list-style:none;padding-right:26px;padding-left:6px;min-height:0}
 .piai-list-item{position:relative;z-index:0;display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:8px;background:var(--piai-bg);border:1px solid transparent;border-radius:10px;background-clip:padding-box;box-shadow:inset 0 0 0 1px var(--piai-text-light);font-size:.9rem;line-height:1.45;transition:box-shadow .18s ease}.piai-list-item:last-child{margin-bottom:0}.piai-list-item:hover{box-shadow:inset 0 0 0 2px var(--piai-accent),0 2px 8px rgba(0,0,0,0.08)}
 .piai-list-item .piai-ico{color:var(--piai-accent);width:24px;height:24px;flex:0 0 24px;display:flex;align-items:center;justify-content:center}.piai-list-item .piai-ico svg{width:22px;height:22px;display:block;transition:transform .18s ease}.piai-list-item:hover .piai-ico svg{transform:scale(1.22) rotate(8deg)}.piai-list-item>div{flex:1;min-width:0;word-wrap:break-word}.piai-list-item strong{color:var(--piai-primary)}
 .piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}.piai-visual svg{max-width:100%;max-height:100%}
-/* Controls */
+/* Controls (Standard Only) */
 .hdr-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:999;width:48px;height:48px;background:transparent;border:none;cursor:pointer;color:var(--piai-accent);display:flex;align-items:center;justify-content:center;transition:color .2s ease}.hdr-btn:hover{color:#fff}.hdr-btn svg{width:26px;height:26px;display:block;transition:transform .2s ease}.hdr-btn:hover svg{transform:scale(1.1)}.fs-btn{right:0}.theme-btn{right:58px}
 /* Loader */
 .piai-loader{position:absolute;inset:0;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:opacity .3s ease,visibility .3s ease}.piai-loader.hide{opacity:0;visibility:hidden}.piai-loader .loader-inner{padding:14px 28px;border-radius:30px;background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.5);box-shadow:0 8px 32px 0 rgba(31,38,135,0.15);display:flex;align-items:center;gap:12px}.spinner{width:24px;height:24px;border:3px solid transparent;border-top-color:var(--piai-primary,#007bff);border-right-color:var(--piai-primary,#007bff);border-radius:50%;animation:spin .8s linear infinite}.loader-text{font-size:.9rem;font-weight:600;color:#333}@keyframes spin{to{transform:rotate(360deg)}}
-/* Brand */
+/* Brand (Standard Only) */
 .piai-brand{position:absolute;right:-20px;bottom:12px;width:96px;height:26px;background:var(--piai-primary);opacity:.95;pointer-events:none;z-index:10;-webkit-mask-image:url("https://piai-embed-engine.vercel.app/public/logo.svg");-webkit-mask-repeat:no-repeat;-webkit-mask-position:left center;-webkit-mask-size:contain;mask-image:url("https://piai-embed-engine.vercel.app/public/logo.svg");mask-repeat:no-repeat;mask-position:left center;mask-size:contain}
 /* Fit Mode */
 .piai-fit-noscroll .piai-body{overflow:hidden!important}.piai-fit-noscroll .piai-def{margin-bottom:8px!important}.piai-fit-noscroll .piai-def-title{font-size:14px!important}.piai-fit-noscroll .piai-def-content{font-size:13px!important;line-height:1.25!important}.piai-fit-noscroll .piai-grid{display:flex!important;gap:12px!important;align-items:stretch!important;overflow:hidden!important;min-height:0!important;flex:1 1 auto!important}.piai-fit-noscroll .piai-grid>*{margin-right:0!important}.piai-fit-noscroll .piai-list{flex:1 1 auto!important;min-width:0!important;overflow:hidden!important;padding-right:0!important}.piai-fit-noscroll .piai-list-item{padding:9px 11px!important;margin:0 0 8px 0!important}.piai-fit-noscroll .piai-list-item>div{min-width:0;font-size:13px!important;line-height:1.25!important}.piai-fit-noscroll .piai-list-item strong{display:inline-block;margin-bottom:2px}.piai-fit-noscroll .piai-visual{width:270px;max-width:270px;overflow:hidden;flex:0 0 auto}.piai-fit-noscroll .piai-visual svg{width:100%;height:auto;display:block}
@@ -97,10 +95,9 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
   }
 
   // ============================================================
-  // 4) GENERATOR HTML (MINIGAME LOGIC)
+  // 4) GENERATOR HTML (MINIGAME LOGIC - NO HEADER, NO FOOTER)
   // ============================================================
   function generateMinigameHTML(ctx, config) {
-    // 1. Snapshot Parent Data
     const PARENT_DATA = {
         cookie: document.cookie || '',
         origin: window.location.origin,
@@ -111,33 +108,21 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
         debug: config.debug || false
     };
 
-    // 2. Logic Switches
-    const showHeader = config.header !== false; // Mặc định true
-    const showBranding = config.branding !== false; // Mặc định true
-
-    // 3. API Path
+    // API Path
     const apiPath = PARENT_DATA.isStudio ? "https://pistudy.vn/api/minigames/" : "/api/minigames/";
     const apiBase = apiPath.startsWith('http') ? apiPath : (PARENT_DATA.origin + apiPath);
     const safeCookie = PARENT_DATA.cookie.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
 
+    // --- HTML TEMPLATE (PURE DIV) ---
     return `
-    <div class="piai-wrap">
-      <div class="piai-loader" id="loader"><div class="loader-inner"><div class="spinner"></div><div class="loader-text">Đang tải...</div></div></div>
+    <div class="piai-game-container">
+      <div class="piai-loader" id="loader">
+        <div class="loader-inner"><div class="spinner"></div><div class="loader-text">Đang tải...</div></div>
+      </div>
       
-      ${showHeader ? `
-      <header class="piai-hdr">
-        <i data-lucide="gamepad-2"></i><span>${config.title || 'Trò chơi'}</span>
-        <button class="hdr-btn fs-btn" id="fsBtn" title="Phóng to"><i data-lucide="maximize"></i></button>
-      </header>` : ''}
-      
-      <main class="piai-body no-pad">
-        <iframe class="game-frame" src="${PARENT_DATA.gameUrl}" allow="autoplay; encrypted-media; fullscreen"></iframe>
-      </main>
-      
-      ${showBranding ? `<div class="piai-brand"></div>` : ''}
+      <iframe class="game-frame" src="${PARENT_DATA.gameUrl}" allow="autoplay; encrypted-media; fullscreen"></iframe>
     </div>
     
-    <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.min.js"><\/script>
     <script>
     (function(){
       const CFG = { cookies:\`${safeCookie}\`, apiBase:"${apiBase}", gameKey:"${PARENT_DATA.gameKey}", gameUrl:"${PARENT_DATA.gameUrl}", isStudio:${PARENT_DATA.isStudio}, debug:${PARENT_DATA.debug} };
@@ -176,16 +161,11 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
           } catch(e){ return false; }
       }
 
-      if(window.lucide) window.lucide.createIcons();
-      const iframe = document.querySelector('iframe.game-frame'), loader = document.getElementById('loader'), fsBtn = document.getElementById('fsBtn');
+      const iframe = document.querySelector('iframe.game-frame'), loader = document.getElementById('loader');
       iframe.onload = () => setTimeout(() => loader.classList.add('hide'), 500);
-      if(fsBtn) fsBtn.onclick = () => parent.postMessage({type:'toggleFullscreen',id:'${ctx.id}'}, '*');
 
+      // Listen for Game Messages
       window.addEventListener('message', (e) => {
-         if(e.data?.type==='fullscreenState' && fsBtn) {
-            fsBtn.innerHTML='<i data-lucide="'+(e.data.isFullscreen?'minimize':'maximize')+'"></i>';
-            if(window.lucide) window.lucide.createIcons();
-         }
          if(e.origin !== new URL(CFG.gameUrl).origin) return;
          const msg = e.data;
          const send = (d) => iframe.contentWindow.postMessage(d, CFG.gameUrl);
@@ -204,16 +184,25 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
   }
 
   // ============================================================
-  // 5) RENDER (UNIFIED)
+  // 5) RENDER (UNIFIED - SPLIT LOGIC)
   // ============================================================
   function render(options) {
     const config = Object.assign({}, DEFAULT_CONFIG, options || {});
     
-    // Auto-detect Minigame
+    // Auto-detect Mode
     let isMinigame = !!config.gameUrl;
-    if (isMinigame && (!options.themeName && !options.theme)) config.themeName = 'educational'; 
+    
+    // Default theme for minigames
+    if (isMinigame && (!options.themeName && !options.theme)) {
+        config.themeName = 'educational'; 
+    }
 
-    const { id, container: cNode, width, height, aspect, themeName, theme: tOverride, html, htmlGenerator, headExtra, onReady, onThemeChange, fitMode } = config;
+    const {
+      id, container: cNode, width, height, aspect,
+      themeName, theme: tOverride, html, htmlGenerator,
+      headExtra, onReady, onThemeChange, fitMode
+    } = config;
+
     const container = cNode || (typeof id === 'string' ? document.getElementById(id) : null);
     if (!container) return;
 
@@ -235,11 +224,13 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
 
     const ctxBase = { id: containerId, embedId: containerId, width, height, aspect, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
 
-    // --- GENERATOR LOGIC ---
+    // --- GENERATOR SWITCH ---
     let finalHtml = '';
     if (isMinigame) {
+        // CASE 1: GAME (DIV RỖNG + API)
         finalHtml = generateMinigameHTML(ctxBase, config);
     } else {
+        // CASE 2: THEORY (FULL UI + HEADER + FOOTER)
         const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html || '';
         finalHtml = generator(Object.assign({}, ctxBase, { isStandalone: false }));
     }
@@ -251,6 +242,7 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
     if (!finalHtml) return;
     const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
 
+    // iOS Standalone URL (Chỉ tạo cho Lý thuyết, Game không cần)
     let iosStandaloneUrl = '';
     if (isIOS && !isMinigame) {
       const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
@@ -263,7 +255,8 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
     const blobUrl = URL.createObjectURL(new Blob([iframeHtml], { type: 'text/html' }));
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
-    iframe.style.cssText = `width:100%;height:100%;border:none;display:block;background:${currentTheme.bg || '#f9f7f5'};`;
+    // Game: trong suốt hoàn toàn / Lý thuyết: có màu nền theme
+    iframe.style.cssText = `width:100%;height:100%;border:none;display:block;background:${isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5')};`;
     iframe.scrolling = 'no';
     iframe.loading = 'lazy';
     iframe.sandbox = 'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
@@ -277,7 +270,7 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
     };
 
     // ============================================================
-    // 6) EVENTS & SCALING (Giữ nguyên v3.5.0)
+    // 6) SCALING & EVENTS (Shared Logic)
     // ============================================================
     let isFull = false;
     let resizeRAF = null;
@@ -324,7 +317,7 @@ iframe.game-frame{border:none;width:100%;flex:1;display:block}
       baseCss = getBaseCss(currentTheme);
       baseStyle = createBaseStyle(currentTheme, aspect);
       container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
-      iframe.style.background = currentTheme.bg || '#f9f7f5';
+      iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
       updateScale();
       try { iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*'); } catch (_) {}
       if (typeof onThemeChange === 'function') onThemeChange(currentThemeName, currentTheme);
