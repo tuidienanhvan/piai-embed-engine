@@ -1,9 +1,9 @@
 // piai-embed-engine.js
-// v3.9.0 – HIGH-RES SCALING EDITION (Unified)
+// v3.10.0 – SEPARATED LOGIC EDITION (Init vs Theme)
 // ------------------------------------------------------------------
 // 1. Mechanism: Always use 'transform: scale()' for EVERYTHING.
-// 2. Logic: Render at Base Resolution (e.g., 1920x1080) -> Scale to fit Container.
-// 3. Benefit: Sharp text/vectors regardless of screen size (Super Sampling).
+// 2. Logic: Render at Base Resolution -> Scale to fit Container.
+// 3. Update: Separated 'piaiInit' (for ID/Security) from 'piaiApplyTheme' (for UI).
 // ------------------------------------------------------------------
 
 (function (global) {
@@ -42,7 +42,8 @@
     },
   };
 
-  // Mặc định là 800x450, nhưng bạn có thể truyền 1920x1080 vào hàm render()
+  const THEME_ORDER = Object.keys(THEMES);
+
   const DEFAULT_CONFIG = {
     width: 800, 
     height: 450, 
@@ -327,8 +328,6 @@
     // -------------------------------------------------------------
     // LOGIC: UNIFIED SCALING (Dùng transform cho tất cả)
     // -------------------------------------------------------------
-    // Ban đầu ta set cứng width/height theo config (vd: 1920x1080)
-    // Sau đó updateScale sẽ co giãn nó cho vừa container.
     wrapper.style.cssText = `position:absolute; top:0; left:0; width:${width}px; height:${height}px; transform-origin: center center;`;
 
     const ctxBase = { id: containerId, embedId: containerId, width, height, aspect, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
@@ -368,7 +367,27 @@
 
     iframe.onload = function () {
       try { URL.revokeObjectURL(blobUrl); } catch (_) {}
-      try { if (iframe.contentWindow) iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*'); } catch (_) {}
+      
+      // ----------------------------------------------------------
+      // NEW LOGIC: SEPARATE INIT (ID) AND THEME
+      // ----------------------------------------------------------
+      if (iframe.contentWindow) {
+          // 1. Send ID for Handshake/Security
+          iframe.contentWindow.postMessage({ 
+              type: 'piaiInit', 
+              id: containerId,
+              version: '3.10.0'
+          }, '*');
+
+          // 2. Send Theme for UI
+          iframe.contentWindow.postMessage({ 
+              type: 'piaiApplyTheme', 
+              // Removed 'id' to enforce separation
+              themeName: currentThemeName, 
+              theme: currentTheme 
+          }, '*');
+      }
+
       if (typeof onReady === 'function') onReady(iframe, ctxBase);
     };
 
@@ -383,7 +402,7 @@
       const cw = rect.width || container.clientWidth || width;
       const ch = rect.height || container.clientHeight || height;
 
-      // Tính tỉ lệ scale dựa trên kích thước Base (1920x1080) và kích thước Container
+      // Tính tỉ lệ scale dựa trên kích thước Base (e.g. 1920x1080) và kích thước Container
       let scale = Math.min(cw / width, ch / height);
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
       
@@ -440,7 +459,14 @@
       container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
       iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
       updateScale();
-      try { iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*'); } catch (_) {}
+      try { 
+        // Send Theme Update ONLY
+        iframe.contentWindow.postMessage({ 
+            type: 'piaiApplyTheme', 
+            themeName: currentThemeName, 
+            theme: currentTheme 
+        }, '*'); 
+      } catch (_) {}
       if (typeof onThemeChange === 'function') onThemeChange(currentThemeName, currentTheme);
     };
 
@@ -509,7 +535,7 @@
   // 7) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.9.0',
+    version: '3.10.0',
     render,
     themes: THEMES,
     getThemeByName,
