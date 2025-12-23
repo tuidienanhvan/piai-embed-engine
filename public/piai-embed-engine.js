@@ -1,9 +1,10 @@
 // piai-embed-engine.js
-// v3.10.0 – SEPARATED LOGIC EDITION (Init vs Theme)
+// v3.10.1 – PIXEL PERFECT MOBILE FIX (Full Preserved Logic)
 // ------------------------------------------------------------------
 // 1. Mechanism: Always use 'transform: scale()' for EVERYTHING.
 // 2. Logic: Render at Base Resolution -> Scale to fit Container.
-// 3. Update: Separated 'piaiInit' (for ID/Security) from 'piaiApplyTheme' (for UI).
+// 3. Security: Separated 'piaiInit' (ID) vs 'piaiApplyTheme' (UI).
+// 4. Fix: Mobile gap removed by forcing container height via JS.
 // ------------------------------------------------------------------
 
 (function (global) {
@@ -227,7 +228,8 @@
   function createBaseStyle(theme, aspect) {
     const borderCol = (theme.primary || '#800020') + '26';
     return {
-      default: `width:100%;max-width:100%;display:block;position:relative;box-sizing:border-box;aspect-ratio:${aspect};height:auto;border-radius:${BASE_RADIUS}px;border:1px solid ${borderCol};overflow:hidden;background:transparent;`,
+      // Lưu ý: Bỏ aspect-ratio ở đây để JS tự quyết định height
+      default: `width:100%;max-width:100%;display:block;position:relative;box-sizing:border-box;height:auto;border-radius:${BASE_RADIUS}px;border:1px solid ${borderCol};overflow:hidden;background:transparent;`,
       fullscreen: `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;box-sizing:border-box;margin:0;border-radius:0;z-index:99999;background:#000;border:none;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)`,
     };
   }
@@ -314,7 +316,7 @@
     const containerId = container.id || (typeof id === 'string' ? id : 'piai_' + Date.now());
     container.id = containerId;
 
-    const { isIOS, isAndroid, isMobile } = detectDevice();
+    const { isIOS } = detectDevice();
     let currentTheme = tOverride || getThemeByName(themeName);
     let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
     let baseCss = getBaseCss(currentTheme);
@@ -325,10 +327,8 @@
 
     const wrapper = document.createElement('div');
     
-    // -------------------------------------------------------------
-    // LOGIC: UNIFIED SCALING (Dùng transform cho tất cả)
-    // -------------------------------------------------------------
-    wrapper.style.cssText = `position:absolute; top:0; left:0; width:${width}px; height:${height}px; transform-origin: center center;`;
+    // Set cứng kích thước gốc (VD: 1920x1080)
+    wrapper.style.cssText = `position:absolute; top:0; left:0; width:${width}px; height:${height}px; transform-origin: 0 0;`;
 
     const ctxBase = { id: containerId, embedId: containerId, width, height, aspect, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
 
@@ -347,7 +347,6 @@
     if (!finalHtml) return;
     const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
 
-    // iOS Standalone URL
     let iosStandaloneUrl = '';
     if (isIOS && !isMinigame) {
       const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
@@ -369,20 +368,19 @@
       try { URL.revokeObjectURL(blobUrl); } catch (_) {}
       
       // ----------------------------------------------------------
-      // NEW LOGIC: SEPARATE INIT (ID) AND THEME
+      // SEPARATE INIT (ID) AND THEME (UI) - PRESERVED FROM v3.10.0
       // ----------------------------------------------------------
       if (iframe.contentWindow) {
           // 1. Send ID for Handshake/Security
           iframe.contentWindow.postMessage({ 
               type: 'piaiInit', 
               id: containerId,
-              version: '3.10.0'
+              version: '3.10.1'
           }, '*');
 
           // 2. Send Theme for UI
           iframe.contentWindow.postMessage({ 
               type: 'piaiApplyTheme', 
-              // Removed 'id' to enforce separation
               themeName: currentThemeName, 
               theme: currentTheme 
           }, '*');
@@ -392,7 +390,7 @@
     };
 
     // ============================================================
-    // 6) EVENTS & SCALING (Unified Scale Logic)
+    // 6) EVENTS & SCALING (FIXED LOGIC)
     // ============================================================
     let isFull = false;
     let resizeRAF = null;
@@ -402,43 +400,36 @@
       const cw = rect.width || container.clientWidth || width;
       const ch = rect.height || container.clientHeight || height;
 
-      // Tính tỉ lệ scale dựa trên kích thước Base (e.g. 1920x1080) và kích thước Container
-      let scale = Math.min(cw / width, ch / height);
+      // 1. Calculate Ratio
+      // Nếu không Fullscreen, ta chỉ quan tâm Scale theo Width để fit ngang
+      let scale = isFull ? Math.min(cw / width, ch / height) : (cw / width);
+      
       if (!Number.isFinite(scale) || scale <= 0) scale = 1;
       
-      // Làm tròn để font sắc nét hơn (chỉ giữ 3 số thập phân)
+      // 2. Rounding (giữ 3 số lẻ cho đẹp font)
       const roundedScale = Math.floor(scale * 1000) / 1000;
 
-      // Tính toán căn giữa
-      const dx = Math.round((cw - width * roundedScale) / 2);
-      const dy = Math.round((ch - height * roundedScale) / 2);
+      // 3. Tính toán kích thước thực sau khi scale
+      const contentW = width * roundedScale;
+      const contentH = height * roundedScale;
+
+      // 4. Tính toán Center (chỉ dùng cho Fullscreen hoặc khi container lớn hơn content)
+      const dx = Math.round((cw - contentW) / 2);
+      const dy = Math.round((ch - contentH) / 2);
 
       if (isFull) {
-        // Fullscreen: Scale + Center
+        // Fullscreen: Giữ nguyên logic cũ (Center giữa màn hình)
+        wrapper.style.transformOrigin = 'center center';
         wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${roundedScale})`;
       } else {
-        // Embed: Scale + Center (Giống logic cũ v3.5 nhưng áp dụng cho cả Game)
-        wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${roundedScale})`;
+        // EMBED MODE (FIX MOBILE GAP)
+        // Thay vì dùng aspect-ratio toán học (gây lẻ pixel), 
+        // ta set cứng chiều cao Container = Chiều cao nội dung (Content Height).
+        container.style.height = `${contentH}px`;
         
-        // Điều chỉnh chiều cao container cho khít (nếu mobile)
-        if (isAndroid && isMobile) {
-           const idealH = (height / width) * cw;
-           if ((width * roundedScale) < (cw - 0.5) || (height * roundedScale) < (idealH - 0.5)) {
-               // Logic dự phòng cho Android
-               wrapper.style.transform = `scale(${roundedScale})`;
-               wrapper.style.transformOrigin = '0 0';
-               container.style.height = `${Math.round(height * roundedScale)}px`;
-           } else {
-               container.style.height = `${Math.round(height * roundedScale)}px`;
-           }
-        } else {
-           // Desktop/iOS: Chỉ cần set height container để wrapper không bị che
-           container.style.height = `${cw * (height / width)}px`;
-           // Reset lại transform origin để center hoạt động đúng với translate
-           wrapper.style.transformOrigin = '0 0';
-           // Override lại transform ở trên để bỏ translate (vì container đã co giãn theo)
-           wrapper.style.transform = `scale(${roundedScale})`;
-        }
+        wrapper.style.transformOrigin = '0 0';
+        // Center ngang (nếu có dư chút xíu do làm tròn, thường là 0)
+        wrapper.style.transform = `translate(${Math.max(0, dx)}px, 0px) scale(${roundedScale})`;
       }
     };
 
@@ -460,7 +451,7 @@
       iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
       updateScale();
       try { 
-        // Send Theme Update ONLY
+        // Send Theme Update ONLY (No ID)
         iframe.contentWindow.postMessage({ 
             type: 'piaiApplyTheme', 
             themeName: currentThemeName, 
@@ -535,7 +526,7 @@
   // 7) EXPORT
   // ============================================================
   global.PiaiEmbed = {
-    version: '3.10.0',
+    version: '3.10.1',
     render,
     themes: THEMES,
     getThemeByName,
