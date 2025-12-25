@@ -1,29 +1,27 @@
 // piai-embed-engine.js
-// v3.11.0 – PIXEL PERFECT EDITION (Zero Gap Guarantee)
+// v3.12.0 – FINAL STABLE (Pixel Perfect + Theme Compatibility)
 // ==============================================================================
 //
-// CHANGELOG v3.11.0:
+// CHANGELOG v3.12.0:
 // ------------------
-// 1. ROOT CAUSE FIX: Removed all scale rounding (no Math.floor/ceil).
-//    - Scale now uses full decimal precision for pixel-perfect calculations.
+// 1. PIXEL PERFECT SCALING (from v3.11.0):
+//    - Removed all scale rounding (no Math.floor/ceil)
+//    - Scale uses full decimal precision for zero-gap rendering
+//    - Container dimensions sync exactly with scaled content
 //
-// 2. CONTAINER-CONTENT SYNC: Container dimensions are set EXACTLY to scaled
-//    content dimensions, eliminating any CSS vs JS calculation mismatch.
+// 2. THEME COMPATIBILITY FIX (from v3.10.3):
+//    - Added 'id' back to 'piaiApplyTheme' message for iframe validation
+//    - Ensures games that check e.data.id can receive theme updates
 //
-// 3. OVERFLOW SAFETY: Added overflow:hidden to clip any sub-pixel rendering
-//    differences across browsers.
-//
-// 4. TRANSFORM ORIGIN: Fixed at '0 0' (top-left) for embed mode to ensure
-//    predictable positioning without centering artifacts.
-//
-// 5. PRESERVED ALL FEATURES:
+// 3. PRESERVED ALL FEATURES:
 //    - Separate piaiInit (security) vs piaiApplyTheme (UI) messages
-//    - iOS standalone URL support
+//    - iOS standalone URL support for fullscreen workaround
 //    - Fullscreen toggle with proper state management
 //    - Theme switching (classic, educational, night)
 //    - Minigame bridge with cookie parsing, stats, and result saving
 //    - MutationObserver cleanup on DOM removal
 //    - Responsive resize handling with RAF debouncing
+//    - Debug logging option
 //
 // ==============================================================================
 
@@ -143,7 +141,7 @@
    */
   function debugLog(message, data, debugEnabled) {
     if (debugEnabled) {
-      console.log(`[PiAI Engine v3.11.0] ${message}`, data || '');
+      console.log(`[PiAI Engine v3.12.0] ${message}`, data || '');
     }
   }
 
@@ -546,7 +544,7 @@
     
     return {
       // Default embedded mode
-      // NOTE v3.11.0: Removed aspect-ratio from CSS - JS controls dimensions directly
+      // NOTE v3.12.0: Removed aspect-ratio from CSS - JS controls dimensions directly
       default: `
         width: 100%;
         max-width: 100%;
@@ -1021,16 +1019,24 @@
       
       // Send initialization messages to iframe
       if (iframe.contentWindow) {
-        // 1. Send ID for handshake/security (no theme data)
+        // ================================================================
+        // MESSAGE 1: piaiInit (Handshake/Security)
+        // - Contains only ID and version for security validation
+        // ================================================================
         iframe.contentWindow.postMessage({ 
           type: 'piaiInit', 
           id: containerId,
-          version: '3.11.0'
+          version: '3.12.0'
         }, '*');
 
-        // 2. Send theme for UI styling (separate message)
+        // ================================================================
+        // MESSAGE 2: piaiApplyTheme (UI Styling)
+        // - Contains theme data AND id for compatibility
+        // - v3.12.0 FIX: Added 'id' back for games that validate e.data.id
+        // ================================================================
         iframe.contentWindow.postMessage({ 
           type: 'piaiApplyTheme', 
+          id: containerId,  // <-- COMPATIBILITY FIX from v3.10.3
           themeName: currentThemeName, 
           theme: currentTheme 
         }, '*');
@@ -1052,12 +1058,17 @@
     let resizeRAF = null;      // RAF handle for resize debouncing
 
     /**
-     * UPDATE SCALE - Core scaling logic (v3.11.0 Fix)
+     * UPDATE SCALE - Core scaling logic (v3.12.0 Pixel Perfect)
      * 
-     * KEY CHANGES:
+     * KEY FEATURES:
      * 1. NO ROUNDING of scale value - use full decimal precision
      * 2. Container dimensions set EXACTLY to scaled content size
      * 3. Transform origin at 0,0 for predictable positioning
+     * 
+     * WHY NO ROUNDING?
+     * - Math.floor causes gaps (content smaller than container)
+     * - Math.ceil causes overflow (content larger than container)
+     * - Exact value = pixel perfect fit
      */
     const updateScale = () => {
       // Get container dimensions
@@ -1081,16 +1092,15 @@
       }
 
       // =====================================================================
-      // v3.11.0 FIX: NO ROUNDING
+      // v3.12.0 PIXEL PERFECT: NO ROUNDING
       // =====================================================================
-      // Previous versions used Math.floor or Math.ceil which caused gaps.
-      // We now use the EXACT scale value for pixel-perfect rendering.
+      // We use the EXACT scale value for pixel-perfect rendering.
       // 
       // Example with containerWidth = 360px, baseWidth = 1920px:
       // - Exact scale = 0.1875
-      // - Math.floor(0.1875 * 1000) / 1000 = 0.187 → contentWidth = 359.04px → GAP!
-      // - Math.ceil(0.1875 * 1000) / 1000 = 0.188 → contentWidth = 360.96px → OVERFLOW!
-      // - Exact: 0.1875 → contentWidth = 360px → PERFECT!
+      // - Math.floor(0.1875 * 1000) / 1000 = 0.187 → 359.04px → GAP!
+      // - Math.ceil(0.1875 * 1000) / 1000 = 0.188 → 360.96px → OVERFLOW!
+      // - Exact: 0.1875 → 360px → PERFECT!
       // =====================================================================
 
       // Calculate exact content dimensions after scaling
@@ -1119,14 +1129,10 @@
         
       } else {
         // =================================================================
-        // EMBED MODE (v3.11.0 Fix)
+        // EMBED MODE (v3.12.0 Pixel Perfect)
         // =================================================================
-        // KEY: Set container height to EXACT content height.
+        // Set container height to EXACT content height.
         // This eliminates any gap between CSS aspect-ratio and JS scaling.
-        //
-        // The container's initial aspect-ratio (from HTML) serves only as
-        // a placeholder for layout shift prevention. Once JS runs, we
-        // override with the exact calculated height.
         // =================================================================
         
         // Set container height to exact scaled content height
@@ -1135,8 +1141,6 @@
         // Position wrapper at origin (no centering needed in embed mode)
         wrapper.style.transformOrigin = '0 0';
         wrapper.style.transform = `scale(${scale})`;
-        
-        // Note: translate(0, 0) is default, no need to specify
       }
     };
 
@@ -1187,11 +1191,16 @@
       // Recalculate scale (in case container size changed)
       updateScale();
       
+      // ================================================================
       // Notify iframe of theme change
+      // v3.12.0 FIX: Include 'id' for compatibility with games that
+      // validate e.data.id before accepting theme updates
+      // ================================================================
       try { 
         if (iframe.contentWindow) {
           iframe.contentWindow.postMessage({ 
             type: 'piaiApplyTheme', 
+            id: containerId,  // <-- COMPATIBILITY FIX
             themeName: currentThemeName, 
             theme: currentTheme 
           }, '*'); 
@@ -1328,7 +1337,7 @@
     // Initial scale calculation
     updateScale();
     
-    debugLog('Embed mounted successfully', { containerId, version: '3.11.0' }, debug);
+    debugLog('Embed mounted successfully', { containerId, version: '3.12.0' }, debug);
   }
 
   // ============================================================================
@@ -1339,7 +1348,7 @@
     /**
      * Engine version
      */
-    version: '3.11.0',
+    version: '3.12.0',
     
     /**
      * Main render function
