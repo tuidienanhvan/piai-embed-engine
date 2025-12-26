@@ -24,6 +24,7 @@
 //    - Debug logging option
 //
 // 4. MINIGAME API BRIDGE UPDATE:
+//    - Added apiBase override + same-origin first + fallback list to avoid 404
 //    - Added mateId + question-pool proxy (postMessage) to avoid CORS
 //    - Fixed postMessage targetOrigin to use origin (not full URL)
 //    - Added credentials:'include' for API calls
@@ -75,7 +76,8 @@
     header: true,
     branding: true,
     debug: false,
-    mateId: 'math_lesson_001'
+    mateId: 'math_lesson_001',
+    apiBase: ''
   };
 
   const SYSTEM_FONT_STACK =
@@ -111,6 +113,29 @@
     } catch (_) {
       return '';
     }
+  }
+
+  function normalizeApiBase(base, origin) {
+    const b = String(base || '').trim();
+    if (!b) return '';
+    if (/^https?:\/\//i.test(b)) return b;
+    if (b.startsWith('/')) return origin + b;
+    return origin + '/' + b;
+  }
+
+  function uniqBases(arr) {
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < arr.length; i++) {
+      const v = String(arr[i] || '').trim();
+      if (!v) continue;
+      const vv = v.endsWith('/') ? v : (v + '/');
+      if (!seen.has(vv)) {
+        seen.add(vv);
+        out.push(vv);
+      }
+    }
+    return out;
   }
 
   function getBaseCss(theme) {
@@ -202,77 +227,6 @@
         display: block;
       }
 
-      .piai-def {
-        background: var(--piai-bg);
-        border-left: 5px solid var(--piai-primary);
-        padding: 12px 18px;
-        border-radius: 0 8px 8px 0;
-        transition: box-shadow 0.25s ease;
-      }
-
-      .piai-def:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-
-      .piai-def-title {
-        color: var(--piai-primary);
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 6px;
-      }
-
-      .piai-grid {
-        display: flex;
-        flex: 1;
-        min-height: 0;
-        gap: 20px;
-      }
-
-      .piai-list {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding-right: 26px;
-        padding-left: 6px;
-      }
-
-      .piai-list-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        margin-bottom: 8px;
-        background: var(--piai-bg);
-        border-radius: 10px;
-        box-shadow: inset 0 0 0 1px var(--piai-text-light);
-        transition: box-shadow 0.18s ease;
-      }
-
-      .piai-list-item:hover {
-        box-shadow: inset 0 0 0 2px var(--piai-accent), 0 2px 8px rgba(0,0,0,0.08);
-      }
-
-      .piai-list-item .piai-ico {
-        color: var(--piai-accent);
-        width: 24px;
-        height: 24px;
-        flex: 0 0 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .piai-visual {
-        flex: 0 0 280px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .piai-visual svg { max-width: 100%; max-height: 100%; }
-
       .hdr-btn {
         position: absolute;
         top: 50%;
@@ -343,33 +297,7 @@
 
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      .piai-brand {
-        position: absolute;
-        right: -20px;
-        bottom: 12px;
-        width: 96px;
-        height: 26px;
-        background: var(--piai-primary);
-        opacity: 0.95;
-        pointer-events: none;
-        z-index: 10;
-        -webkit-mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
-        -webkit-mask-repeat: no-repeat;
-        -webkit-mask-position: left center;
-        -webkit-mask-size: contain;
-        mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
-        mask-repeat: no-repeat;
-        mask-position: left center;
-        mask-size: contain;
-      }
-
       .MathJax, mjx-container { transform: none !important; }
-
-      @media (max-width: 650px) {
-        .piai-grid { flex-direction: column; }
-        .piai-visual { flex: 0 0 auto; padding: 10px; width: 100%; }
-        .piai-hdr { padding: 10px 16px; padding-right: 130px; }
-      }
     `;
   }
 
@@ -429,17 +357,23 @@
   function generateMinigameHTML(ctx, config) {
     const gameUrl = config.gameUrl;
     const gameOrigin = config.gameOrigin || safeOrigin(gameUrl);
-    const isStudio = window.location.hostname.includes('studio');
     const mateId = config.mateId || DEFAULT_CONFIG.mateId;
+
+    const origin = window.location.origin;
+
+    const bases = [];
+    const cfgApiBaseAbs = normalizeApiBase(config.apiBase, origin);
+    if (cfgApiBaseAbs) bases.push(cfgApiBaseAbs);
+    bases.push(origin + '/api/minigames/');
+    bases.push('https://apps.pistudy.vn/api/minigames/');
+    bases.push('https://pistudy.vn/api/minigames/');
+    const apiBases = uniqBases(bases);
 
     const cookieRaw = document.cookie || '';
     const safeCookie = cookieRaw
       .replace(/\\/g, '\\\\')
       .replace(/`/g, '\\`')
       .replace(/\${/g, '\\${');
-
-    const apiPath = isStudio ? 'https://pistudy.vn/api/minigames/' : '/api/minigames/';
-    const apiBase = apiPath.startsWith('http') ? apiPath : (window.location.origin + apiPath);
 
     return `
     <div class="piai-wrap" style="background: transparent;">
@@ -462,11 +396,11 @@
     (function() {
       const CFG = {
         cookies: \`${safeCookie}\`,
-        apiBase: "${apiBase}",
+        apiBases: ${JSON.stringify(apiBases)},
+        apiBase: null,
         gameKey: "${config.gameKey || 'unknown-game'}",
         gameUrl: "${gameUrl}",
         gameOrigin: "${gameOrigin}",
-        isStudio: ${isStudio},
         debug: ${!!config.debug},
         mateId: "${mateId}"
       };
@@ -507,13 +441,24 @@
 
       async function api(endpoint, options = {}) {
         const opt = Object.assign({ credentials: "include" }, options);
-        const res = await fetch(CFG.apiBase + endpoint, opt);
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return res;
+        const list = CFG.apiBase ? [CFG.apiBase] : CFG.apiBases;
+
+        let lastErr = null;
+        for (var i = 0; i < list.length; i++) {
+          var base = list[i];
+          try {
+            const res = await fetch(base + endpoint, opt);
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            CFG.apiBase = base;
+            return res;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr || new Error("API Error");
       }
 
       async function fetchStats() {
-        if (CFG.isStudio) return { playCount: 0, bestScore: 0 };
         try {
           const res = await api("logs/");
           const data = await res.json();
@@ -533,7 +478,6 @@
       }
 
       async function saveResult(payload) {
-        if (CFG.isStudio) return true;
         try {
           await api("logs/", {
             method: "POST",
@@ -585,9 +529,8 @@
           env: {
             gameKey: CFG.gameKey,
             mateId: CFG.mateId,
-            apiBase: CFG.apiBase,
-            questionPoolUrl: CFG.apiBase + "question-pool/" + encodeURIComponent(CFG.mateId) + "/",
-            isStudio: CFG.isStudio
+            apiBase: CFG.apiBase || "",
+            apiBases: CFG.apiBases || []
           }
         });
       }
