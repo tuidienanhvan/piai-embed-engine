@@ -23,143 +23,98 @@
 //    - Responsive resize handling with RAF debouncing
 //    - Debug logging option
 //
+// 4. MINIGAME API BRIDGE UPDATE:
+//    - Added mateId + question-pool proxy (postMessage) to avoid CORS
+//    - Fixed postMessage targetOrigin to use origin (not full URL)
+//    - Added credentials:'include' for API calls
+//
 // ==============================================================================
 
 (function (global) {
   'use strict';
 
-  // ============================================================================
-  // 1) THEMES & CONFIGURATION
-  // ============================================================================
-  
-  /**
-   * Predefined themes for the embed engine.
-   * Each theme defines colors for primary actions, accents, backgrounds, and text.
-   */
   const THEMES = {
-    classic: { 
-      name: 'classic', 
-      primary: '#800020',      // Burgundy - elegant, traditional
-      accent: '#b8860b',       // Dark goldenrod - warm highlight
-      secondary: '#002b5c',    // Navy blue - professional
-      bg: '#f9f7f5',           // Off-white - easy on eyes
-      text: '#002b4a',         // Dark blue - readable
-      textLight: '#666666'     // Gray - secondary text
+    classic: {
+      name: 'classic',
+      primary: '#800020',
+      accent: '#b8860b',
+      secondary: '#002b5c',
+      bg: '#f9f7f5',
+      text: '#002b4a',
+      textLight: '#666666'
     },
-    educational: { 
-      name: 'educational', 
-      primary: '#2196F3',      // Material blue - friendly, modern
-      accent: '#FFC107',       // Amber - attention-grabbing
-      secondary: '#4CAF50',    // Green - positive, growth
-      bg: '#FFFFFF',           // Pure white - clean
-      text: '#212121',         // Near black - high contrast
-      textLight: '#757575'     // Medium gray - secondary
+    educational: {
+      name: 'educational',
+      primary: '#2196F3',
+      accent: '#FFC107',
+      secondary: '#4CAF50',
+      bg: '#FFFFFF',
+      text: '#212121',
+      textLight: '#757575'
     },
-    night: { 
-      name: 'night', 
-      primary: '#A1C2BD',      // Muted teal - calm
-      accent: '#1D24CA',       // Deep blue - focused
-      secondary: '#A8A1CE',    // Lavender - soft accent
-      bg: '#19183B',           // Dark purple - easy night viewing
-      text: '#F9E8C9',         // Warm cream - readable on dark
-      textLight: '#9BA4B5'     // Muted blue-gray - secondary
-    },
+    night: {
+      name: 'night',
+      primary: '#A1C2BD',
+      accent: '#1D24CA',
+      secondary: '#A8A1CE',
+      bg: '#19183B',
+      text: '#F9E8C9',
+      textLight: '#9BA4B5'
+    }
   };
 
-  /**
-   * Order of themes for cycling through with theme switch button.
-   */
   const THEME_ORDER = Object.keys(THEMES);
 
-  /**
-   * Default configuration values.
-   * These can be overridden by passing options to render().
-   */
   const DEFAULT_CONFIG = {
-    width: 800,                // Base content width in pixels
-    height: 450,               // Base content height in pixels
-    aspect: '16 / 9',          // Aspect ratio (used for initial layout)
-    themeName: 'classic',      // Default theme
-    headExtra: '',             // Additional HTML to inject in <head>
-    fitMode: 'scroll',         // 'scroll' or 'no-scroll'
-    header: true,              // Show header bar
-    branding: true,            // Show PiAI branding
-    debug: false               // Enable debug logging
+    width: 800,
+    height: 450,
+    aspect: '16 / 9',
+    themeName: 'classic',
+    headExtra: '',
+    fitMode: 'scroll',
+    header: true,
+    branding: true,
+    debug: false,
+    mateId: 'math_lesson_001'
   };
 
-  /**
-   * System font stack for consistent cross-platform typography.
-   */
-  const SYSTEM_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
-  
-  /**
-   * Base border radius for containers.
-   */
+  const SYSTEM_FONT_STACK =
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+
   const BASE_RADIUS = 16;
 
-  // ============================================================================
-  // 2) HELPER FUNCTIONS
-  // ============================================================================
-
-  /**
-   * Detect device type based on user agent.
-   * @returns {Object} Device detection results
-   */
   function detectDevice() {
     const ua = navigator.userAgent || '';
-    return { 
+    return {
       isIOS: /iPad|iPhone|iPod/.test(ua) && !window.MSStream,
       isAndroid: /Android/i.test(ua),
       isMobile: /Mobi|Android/i.test(ua)
     };
   }
 
-  /**
-   * Get theme object by name, with fallback to default.
-   * @param {string} name - Theme name
-   * @returns {Object} Theme object
-   */
-  function getThemeByName(name) { 
-    return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName]; 
+  function getThemeByName(name) {
+    return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName];
   }
 
-  /**
-   * Normalize fit mode string to valid value.
-   * @param {string} mode - Input fit mode
-   * @returns {string} Normalized fit mode ('scroll' or 'no-scroll')
-   */
   function normalizeFitMode(mode) {
     const m = String(mode || '').toLowerCase().trim();
     return (m === 'no-scroll' || m === 'noscroll' || m === 'compact') ? 'no-scroll' : 'scroll';
   }
 
-  /**
-   * Debug logger - only logs when debug mode is enabled.
-   * @param {string} message - Log message
-   * @param {*} data - Optional data to log
-   * @param {boolean} debugEnabled - Whether debug is enabled
-   */
   function debugLog(message, data, debugEnabled) {
-    if (debugEnabled) {
-      console.log(`[PiAI Engine v3.12.0] ${message}`, data || '');
+    if (debugEnabled) console.log(`[PiAI Engine v3.12.0] ${message}`, data || '');
+  }
+
+  function safeOrigin(url) {
+    try {
+      return new URL(url, window.location.href).origin;
+    } catch (_) {
+      return '';
     }
   }
 
-  // ============================================================================
-  // 3) CSS GENERATOR
-  // ============================================================================
-
-  /**
-   * Generate base CSS with theme variables.
-   * This CSS is injected into the iframe document.
-   * @param {Object} theme - Theme object
-   * @returns {string} CSS string
-   */
   function getBaseCss(theme) {
     return `
-      /* ========================================
-         CSS RESET & VARIABLES
-         ======================================== */
       :root {
         --piai-primary: ${theme.primary};
         --piai-accent: ${theme.accent};
@@ -168,18 +123,10 @@
         --piai-text: ${theme.text};
         --piai-text-light: ${theme.textLight};
       }
-      
-      * { 
-        margin: 0; 
-        padding: 0; 
-        box-sizing: border-box; 
-      }
-      
-      html, body { 
-        width: 100%; 
-        height: 100%; 
-      }
-      
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; }
+
       body {
         font-family: ${SYSTEM_FONT_STACK};
         color: var(--piai-text);
@@ -190,336 +137,249 @@
         text-rendering: optimizeLegibility;
       }
 
-      /* ========================================
-         MAIN WRAPPER
-         ======================================== */
       .piai-wrap {
-        width: 100%; 
+        width: 100%;
         height: 100%;
         background: var(--piai-bg);
-        display: flex; 
+        display: flex;
         flex-direction: column;
-        overflow: hidden; 
-        position: relative; 
+        overflow: hidden;
+        position: relative;
         isolation: isolate;
       }
 
-      /* ========================================
-         HEADER
-         ======================================== */
       .piai-hdr {
-        background: var(--piai-primary); 
+        background: var(--piai-primary);
         color: #fff;
-        padding: 12px 20px; 
+        padding: 12px 20px;
         padding-right: 130px;
-        font-weight: 700; 
-        display: flex; 
-        align-items: center; 
+        font-weight: 700;
+        display: flex;
+        align-items: center;
         gap: 10px;
-        line-height: 1.2; 
+        line-height: 1.2;
         border-bottom: 3px solid var(--piai-accent);
-        position: relative; 
+        position: relative;
         flex: 0 0 auto;
       }
-      
-      .piai-hdr svg { 
-        width: 20px; 
-        height: 20px; 
-        display: block; 
-        flex: 0 0 auto; 
+
+      .piai-hdr svg {
+        width: 20px;
+        height: 20px;
+        display: block;
+        flex: 0 0 auto;
       }
 
-      /* ========================================
-         BODY / CONTENT AREA
-         ======================================== */
       .piai-body {
-        flex: 1; 
+        flex: 1;
         padding: 15px 20px;
-        overflow-y: auto; 
+        overflow-y: auto;
         overflow-x: hidden;
-        display: flex; 
+        display: flex;
         flex-direction: column;
-        min-height: 0; 
-        position: relative; 
+        min-height: 0;
+        position: relative;
         z-index: 1;
       }
-      
-      .piai-body > * { 
-        margin-bottom: 15px; 
-      }
-      
-      .piai-body > *:last-child { 
-        margin-bottom: 0; 
-      }
-      
-      .piai-body::-webkit-scrollbar { 
-        width: 6px; 
-      }
-      
-      .piai-body::-webkit-scrollbar-thumb { 
-        background: var(--piai-text-light); 
-        border-radius: 3px; 
+
+      .piai-body > * { margin-bottom: 15px; }
+      .piai-body > *:last-child { margin-bottom: 0; }
+
+      .piai-body::-webkit-scrollbar { width: 6px; }
+      .piai-body::-webkit-scrollbar-thumb { background: var(--piai-text-light); border-radius: 3px; }
+
+      .piai-body.no-pad {
+        padding: 0 !important;
+        overflow: hidden !important;
+        width: 100%;
+        height: 100%;
       }
 
-      /* ========================================
-         MINIGAME BODY (No Padding)
-         ======================================== */
-      .piai-body.no-pad { 
-        padding: 0 !important; 
-        overflow: hidden !important; 
-        width: 100%; 
-        height: 100%; 
-      }
-      
-      iframe.game-frame { 
-        border: none; 
-        width: 100%; 
-        height: 100%; 
-        display: block; 
+      iframe.game-frame {
+        border: none;
+        width: 100%;
+        height: 100%;
+        display: block;
       }
 
-      /* ========================================
-         CONTENT COMPONENTS
-         ======================================== */
       .piai-def {
-        background: var(--piai-bg); 
+        background: var(--piai-bg);
         border-left: 5px solid var(--piai-primary);
-        padding: 12px 18px; 
-        border-radius: 0 8px 8px 0; 
+        padding: 12px 18px;
+        border-radius: 0 8px 8px 0;
         transition: box-shadow 0.25s ease;
       }
-      
-      .piai-def:hover { 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-      }
-      
-      .piai-def-title { 
-        color: var(--piai-primary); 
-        font-weight: 700; 
-        display: flex; 
-        align-items: center; 
-        gap: 10px; 
-        margin-bottom: 6px; 
-      }
-      
-      .piai-grid { 
-        display: flex; 
-        flex: 1; 
-        min-height: 0; 
-        gap: 20px; 
-      }
-      
-      .piai-list {
-        flex: 1; 
-        display: flex; 
-        flex-direction: column; 
-        overflow-y: auto; 
-        overflow-x: hidden;
-        padding-right: 26px; 
-        padding-left: 6px;
-      }
-      
-      .piai-list-item {
-        display: flex; 
-        align-items: center; 
-        gap: 12px; 
-        padding: 12px 16px; 
-        margin-bottom: 8px;
-        background: var(--piai-bg); 
-        border-radius: 10px;
-        box-shadow: inset 0 0 0 1px var(--piai-text-light); 
-        transition: box-shadow 0.18s ease;
-      }
-      
-      .piai-list-item:hover { 
-        box-shadow: inset 0 0 0 2px var(--piai-accent), 0 2px 8px rgba(0,0,0,0.08); 
-      }
-      
-      .piai-list-item .piai-ico { 
-        color: var(--piai-accent); 
-        width: 24px; 
-        height: 24px; 
-        flex: 0 0 24px; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-      }
-      
-      .piai-visual { 
-        flex: 0 0 280px; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-      }
-      
-      .piai-visual svg { 
-        max-width: 100%; 
-        max-height: 100%; 
+
+      .piai-def:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+      .piai-def-title {
+        color: var(--piai-primary);
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
       }
 
-      /* ========================================
-         HEADER CONTROL BUTTONS
-         ======================================== */
+      .piai-grid {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        gap: 20px;
+      }
+
+      .piai-list {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 26px;
+        padding-left: 6px;
+      }
+
+      .piai-list-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        background: var(--piai-bg);
+        border-radius: 10px;
+        box-shadow: inset 0 0 0 1px var(--piai-text-light);
+        transition: box-shadow 0.18s ease;
+      }
+
+      .piai-list-item:hover {
+        box-shadow: inset 0 0 0 2px var(--piai-accent), 0 2px 8px rgba(0,0,0,0.08);
+      }
+
+      .piai-list-item .piai-ico {
+        color: var(--piai-accent);
+        width: 24px;
+        height: 24px;
+        flex: 0 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .piai-visual {
+        flex: 0 0 280px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .piai-visual svg { max-width: 100%; max-height: 100%; }
+
       .hdr-btn {
-        position: absolute; 
-        top: 50%; 
-        transform: translateY(-50%); 
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
         z-index: 999;
-        width: 48px; 
-        height: 48px; 
-        background: transparent; 
-        border: none; 
+        width: 48px;
+        height: 48px;
+        background: transparent;
+        border: none;
         cursor: pointer;
-        color: var(--piai-accent); 
-        display: flex; 
-        align-items: center; 
+        color: var(--piai-accent);
+        display: flex;
+        align-items: center;
         justify-content: center;
         transition: color 0.2s ease;
       }
-      
-      .hdr-btn:hover { 
-        color: #fff; 
-      }
-      
-      .hdr-btn svg { 
-        width: 26px; 
-        height: 26px; 
-        transition: transform 0.2s ease; 
-      }
-      
-      .hdr-btn:hover svg { 
-        transform: scale(1.1); 
-      }
-      
-      .fs-btn { 
-        right: 0; 
-      }
-      
-      .theme-btn { 
-        right: 58px; 
+
+      .hdr-btn:hover { color: #fff; }
+
+      .hdr-btn svg {
+        width: 26px;
+        height: 26px;
+        transition: transform 0.2s ease;
       }
 
-      /* ========================================
-         LOADING OVERLAY
-         ======================================== */
+      .hdr-btn:hover svg { transform: scale(1.1); }
+
+      .fs-btn { right: 0; }
+      .theme-btn { right: 58px; }
+
       .piai-loader {
-        position: absolute; 
-        inset: 0; 
+        position: absolute;
+        inset: 0;
         background: rgba(0,0,0,0.2);
-        display: flex; 
-        align-items: center; 
+        display: flex;
+        align-items: center;
         justify-content: center;
         z-index: 1000;
-        backdrop-filter: blur(4px); 
+        backdrop-filter: blur(4px);
         -webkit-backdrop-filter: blur(4px);
         transition: opacity 0.3s ease, visibility 0.3s ease;
       }
-      
-      .piai-loader.hide { 
-        opacity: 0; 
-        visibility: hidden; 
-      }
-      
+
+      .piai-loader.hide { opacity: 0; visibility: hidden; }
+
       .piai-loader .loader-inner {
-        padding: 14px 28px; 
-        border-radius: 30px; 
+        padding: 14px 28px;
+        border-radius: 30px;
         background: rgba(255,255,255,0.85);
-        backdrop-filter: blur(12px); 
+        backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255,255,255,0.5); 
+        border: 1px solid rgba(255,255,255,0.5);
         box-shadow: 0 8px 32px 0 rgba(31,38,135,0.15);
-        display: flex; 
-        align-items: center; 
+        display: flex;
+        align-items: center;
         gap: 12px;
       }
-      
+
       .spinner {
-        width: 24px; 
-        height: 24px; 
+        width: 24px;
+        height: 24px;
         border: 3px solid transparent;
-        border-top-color: var(--piai-primary); 
+        border-top-color: var(--piai-primary);
         border-right-color: var(--piai-primary);
-        border-radius: 50%; 
+        border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
-      
-      @keyframes spin { 
-        to { transform: rotate(360deg); } 
-      }
 
-      /* ========================================
-         BRANDING
-         ======================================== */
+      @keyframes spin { to { transform: rotate(360deg); } }
+
       .piai-brand {
-        position: absolute; 
-        right: -20px; 
-        bottom: 12px; 
-        width: 96px; 
+        position: absolute;
+        right: -20px;
+        bottom: 12px;
+        width: 96px;
         height: 26px;
-        background: var(--piai-primary); 
-        opacity: 0.95; 
-        pointer-events: none; 
+        background: var(--piai-primary);
+        opacity: 0.95;
+        pointer-events: none;
         z-index: 10;
         -webkit-mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
-        -webkit-mask-repeat: no-repeat; 
-        -webkit-mask-position: left center; 
+        -webkit-mask-repeat: no-repeat;
+        -webkit-mask-position: left center;
         -webkit-mask-size: contain;
         mask-image: url("https://piai-embed-engine.vercel.app/public/logo.svg");
-        mask-repeat: no-repeat; 
-        mask-position: left center; 
+        mask-repeat: no-repeat;
+        mask-position: left center;
         mask-size: contain;
       }
 
-      /* ========================================
-         MATHJAX OVERRIDE
-         ======================================== */
-      .MathJax, mjx-container { 
-        transform: none !important; 
-      }
+      .MathJax, mjx-container { transform: none !important; }
 
-      /* ========================================
-         RESPONSIVE STYLES
-         ======================================== */
       @media (max-width: 650px) {
-        .piai-grid { 
-          flex-direction: column; 
-        }
-        
-        .piai-visual { 
-          flex: 0 0 auto; 
-          padding: 10px; 
-          width: 100%; 
-        }
-        
-        .piai-hdr { 
-          padding: 10px 16px; 
-          padding-right: 130px; 
-        }
+        .piai-grid { flex-direction: column; }
+        .piai-visual { flex: 0 0 auto; padding: 10px; width: 100%; }
+        .piai-hdr { padding: 10px 16px; padding-right: 130px; }
       }
     `;
   }
 
-  /**
-   * Build complete HTML document with injected styles and scripts.
-   * @param {string} content - HTML content
-   * @param {string} baseCss - CSS to inject
-   * @param {string} headExtra - Additional head content
-   * @returns {string} Complete HTML document
-   */
   function buildHtmlDocument(content, baseCss, headExtra) {
     if (!content) return '';
-    
     const inject = `<style>${baseCss}</style>${headExtra || ''}`;
-    
-    // If content is already a full HTML document
     if (/<!doctype html/i.test(content)) {
-      if (content.includes('</head>')) {
-        return content.replace('</head>', inject + '</head>');
-      }
+      if (content.includes('</head>')) return content.replace('</head>', inject + '</head>');
       return inject + content;
     }
-    
-    // Wrap content in basic HTML structure
     return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -533,18 +393,9 @@
 </html>`;
   }
 
-  /**
-   * Create base style strings for container.
-   * @param {Object} theme - Theme object
-   * @param {string} aspect - Aspect ratio string
-   * @returns {Object} Style strings for default and fullscreen modes
-   */
-  function createBaseStyle(theme, aspect) {
-    const borderCol = (theme.primary || '#800020') + '26'; // 26 = ~15% opacity
-    
+  function createBaseStyle(theme) {
+    const borderCol = (theme.primary || '#800020') + '26';
     return {
-      // Default embedded mode
-      // NOTE v3.12.0: Removed aspect-ratio from CSS - JS controls dimensions directly
       default: `
         width: 100%;
         max-width: 100%;
@@ -556,8 +407,6 @@
         overflow: hidden;
         background: transparent;
       `.replace(/\s+/g, ' ').trim(),
-      
-      // Fullscreen mode
       fullscreen: `
         position: fixed;
         top: 0;
@@ -573,271 +422,202 @@
         border: none;
         overflow: hidden;
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-      `.replace(/\s+/g, ' ').trim(),
+      `.replace(/\s+/g, ' ').trim()
     };
   }
 
-  // ============================================================================
-  // 4) MINIGAME HTML GENERATOR
-  // ============================================================================
-
-  /**
-   * Generate HTML for minigame mode with bridge script.
-   * This creates the iframe wrapper and communication bridge for Open edX integration.
-   * @param {Object} ctx - Context object with embed settings
-   * @param {Object} config - Full configuration object
-   * @returns {string} HTML string
-   */
   function generateMinigameHTML(ctx, config) {
-    // Extract parent page data for bridge communication
-    const PARENT_DATA = {
-      cookie: document.cookie || '',
-      origin: window.location.origin,
-      isStudio: window.location.hostname.includes('studio'),
-      gameKey: config.gameKey || 'unknown-game',
-      gameUrl: config.gameUrl,
-      gameOrigin: config.gameOrigin || new URL(config.gameUrl).origin,
-      debug: config.debug || false
-    };
+    const gameUrl = config.gameUrl;
+    const gameOrigin = config.gameOrigin || safeOrigin(gameUrl);
+    const isStudio = window.location.hostname.includes('studio');
+    const mateId = config.mateId || DEFAULT_CONFIG.mateId;
 
-    // Determine API base URL
-    const apiPath = PARENT_DATA.isStudio 
-      ? "https://pistudy.vn/api/minigames/" 
-      : "/api/minigames/";
-    const apiBase = apiPath.startsWith('http') 
-      ? apiPath 
-      : (PARENT_DATA.origin + apiPath);
-    
-    // Escape cookie string for safe embedding in template literal
-    const safeCookie = PARENT_DATA.cookie
+    const cookieRaw = document.cookie || '';
+    const safeCookie = cookieRaw
       .replace(/\\/g, '\\\\')
       .replace(/`/g, '\\`')
       .replace(/\${/g, '\\${');
 
+    const apiPath = isStudio ? 'https://pistudy.vn/api/minigames/' : '/api/minigames/';
+    const apiBase = apiPath.startsWith('http') ? apiPath : (window.location.origin + apiPath);
+
     return `
     <div class="piai-wrap" style="background: transparent;">
-      <!-- Loading Overlay -->
       <div class="piai-loader" id="loader">
         <div class="loader-inner">
           <div class="spinner"></div>
           <div class="loader-text">Đang tải...</div>
         </div>
       </div>
-      
-      <!-- Game Iframe Container -->
       <main class="piai-body no-pad">
-        <iframe 
-          class="game-frame" 
-          src="${PARENT_DATA.gameUrl}" 
+        <iframe
+          class="game-frame"
+          src="${gameUrl}"
           allow="autoplay; encrypted-media; fullscreen"
         ></iframe>
       </main>
     </div>
-    
+
     <script>
-    /**
-     * PiAI Minigame Bridge Script
-     * Handles communication between parent page (LMS) and game iframe.
-     * Features:
-     * - Cookie-based user authentication
-     * - Stats fetching and result saving via API
-     * - PostMessage communication with origin validation
-     */
     (function() {
-      // Configuration
-      const CFG = { 
-        cookies: \`${safeCookie}\`, 
-        apiBase: "${apiBase}", 
-        gameKey: "${PARENT_DATA.gameKey}", 
-        gameUrl: "${PARENT_DATA.gameUrl}", 
-        isStudio: ${PARENT_DATA.isStudio}, 
-        debug: ${PARENT_DATA.debug} 
+      const CFG = {
+        cookies: \`${safeCookie}\`,
+        apiBase: "${apiBase}",
+        gameKey: "${config.gameKey || 'unknown-game'}",
+        gameUrl: "${gameUrl}",
+        gameOrigin: "${gameOrigin}",
+        isStudio: ${isStudio},
+        debug: ${!!config.debug},
+        mateId: "${mateId}"
       };
-      
-      /**
-       * Debug logger
-       */
-      function log(message, data) { 
-        if (CFG.debug) {
-          console.log("[Bridge] " + message, data || ""); 
-        }
+
+      function log(m, d) { if (CFG.debug) console.log("[Bridge] " + m, d || ""); }
+
+      function getCookie(name) {
+        const match = CFG.cookies.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return match ? match[2] : null;
       }
-      
-      /**
-       * Parse cookie value by name
-       */
-      function getCookie(name) { 
-        const match = CFG.cookies.match('(^|;) ?' + name + '=([^;]*)(;|$)'); 
-        return match ? match[2] : null; 
-      }
-      
-      /**
-       * Extract user info from JWT or legacy cookie
-       */
+
       function getUser() {
         let user = { name: "Khách", username: "guest" };
-        
-        // Try JWT cookie first (newer Open edX)
         const jwt = getCookie("edx-jwt-cookie-header-payload");
-        if (jwt) { 
-          try { 
-            const payload = JSON.parse(atob(jwt.split(".")[1])); 
-            user.name = payload.name || payload.preferred_username; 
-            user.username = payload.preferred_username; 
-            return user; 
-          } catch(e) {
-            log("JWT parse error", e);
-          } 
+        if (jwt) {
+          try {
+            const payload = JSON.parse(atob(jwt.split(".")[1]));
+            user.name = payload.name || payload.preferred_username;
+            user.username = payload.preferred_username;
+            return user;
+          } catch(e) { log("JWT parse error", e); }
         }
-        
-        // Fall back to legacy cookie
         const oldCookie = getCookie("edx-user-info");
-        if (oldCookie) { 
-          try { 
+        if (oldCookie) {
+          try {
             const cleaned = oldCookie
               .replace(/^"|"$/g, '')
               .split('\\\\054').join(',')
-              .split('\\\\\\\\').join(''); 
-            const info = JSON.parse(cleaned); 
-            user.name = info.username; 
-            user.username = info.username; 
-            return user; 
-          } catch(e) {
-            log("Legacy cookie parse error", e);
-          } 
+              .split('\\\\\\\\').join('');
+            const info = JSON.parse(cleaned);
+            user.name = info.username;
+            user.username = info.username;
+            return user;
+          } catch(e) { log("Legacy cookie parse error", e); }
         }
-        
         return user;
       }
-      
-      /**
-       * Make API request with error handling
-       */
-      async function api(endpoint, options = {}) { 
-        try { 
-          const response = await fetch(CFG.apiBase + endpoint, options); 
-          if (!response.ok) {
-            throw new Error('HTTP ' + response.status); 
-          }
-          return response; 
-        } catch(e) { 
-          log("API Error", e); 
-          throw e; 
-        } 
+
+      async function api(endpoint, options = {}) {
+        const opt = Object.assign({ credentials: "include" }, options);
+        const res = await fetch(CFG.apiBase + endpoint, opt);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res;
       }
-      
-      /**
-       * Fetch user's game statistics
-       */
-      async function fetchStats() { 
-        // In Studio mode, return empty stats
-        if (CFG.isStudio) {
-          return { playCount: 0, bestScore: 0 }; 
+
+      async function fetchStats() {
+        if (CFG.isStudio) return { playCount: 0, bestScore: 0 };
+        try {
+          const res = await api("logs/");
+          const data = await res.json();
+          const rows = Array.isArray(data) ? data : (data.results || []);
+          let playCount = 0, bestScore = 0;
+          rows.forEach(item => {
+            if (item.payload?.gameKey === CFG.gameKey) {
+              playCount++;
+              const score = Number(item.payload.score || 0);
+              if (score > bestScore) bestScore = score;
+            }
+          });
+          return { playCount, bestScore };
+        } catch(e) {
+          return { playCount: 0, bestScore: 0 };
         }
-        
-        try { 
-          const response = await api("logs/"); 
-          const data = await response.json(); 
-          const rows = Array.isArray(data) ? data : (data.results || []); 
-          
-          let playCount = 0;
-          let bestScore = 0; 
-          
-          rows.forEach(item => { 
-            if (item.payload?.gameKey === CFG.gameKey) { 
-              playCount++; 
-              const score = Number(item.payload.score || 0); 
-              if (score > bestScore) {
-                bestScore = score; 
-              }
-            } 
-          }); 
-          
-          return { playCount, bestScore }; 
-        } catch(e) { 
-          return { playCount: 0, bestScore: 0 }; 
-        } 
       }
-      
-      /**
-       * Save game result to API
-       */
-      async function saveResult(payload) { 
-        // Skip saving in Studio mode
-        if (CFG.isStudio) {
-          return true; 
+
+      async function saveResult(payload) {
+        if (CFG.isStudio) return true;
+        try {
+          await api("logs/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken") || ""
+            },
+            body: JSON.stringify({
+              msgtype: "RESULT",
+              tsms: Date.now(),
+              payload: Object.assign({}, payload, {
+                userId: null,
+                username: getUser().username
+              })
+            })
+          });
+          return true;
+        } catch(e) {
+          return false;
         }
-        
-        try { 
-          await api("logs/", { 
-            method: "POST", 
-            headers: { 
-              "Content-Type": "application/json", 
-              "X-CSRFToken": getCookie('csrftoken') || "" 
-            }, 
-            body: JSON.stringify({ 
-              msgtype: "RESULT", 
-              tsms: Date.now(), 
-              payload: { 
-                ...payload, 
-                userId: null, 
-                username: getUser().username 
-              } 
-            }) 
-          }); 
-          return true; 
-        } catch(e) { 
-          return false; 
-        } 
       }
-      
-      // DOM Elements
-      const iframe = document.querySelector('iframe.game-frame'); 
-      const loader = document.getElementById('loader'); 
-      
-      // Hide loader when game loads
+
+      async function fetchQuestionPool(mateId) {
+        const mid = mateId || CFG.mateId || "${DEFAULT_CONFIG.mateId}";
+        const res = await api("question-pool/" + encodeURIComponent(mid) + "/");
+        return await res.json();
+      }
+
+      const iframe = document.querySelector("iframe.game-frame");
+      const loader = document.getElementById("loader");
+
       iframe.onload = function() {
-        setTimeout(function() {
-          loader.classList.add('hide');
-        }, 500);
+        setTimeout(function() { loader.classList.add("hide"); }, 500);
       };
-      
-      // Message Handler - Communication Bridge
-      window.addEventListener('message', function(event) {
-        // Validate origin for security
-        if (event.origin !== new URL(CFG.gameUrl).origin) {
-          return;
+
+      function send(data) {
+        try {
+          iframe.contentWindow && iframe.contentWindow.postMessage(data, CFG.gameOrigin || "*");
+        } catch(e) {
+          iframe.contentWindow && iframe.contentWindow.postMessage(data, "*");
         }
-        
-        const msg = event.data; 
-        
-        /**
-         * Send message to game iframe
-         */
-        function send(data) {
-          iframe.contentWindow.postMessage(data, CFG.gameUrl);
-        }
-        
-        // Async handler for messages
-        (async function() {
-          // Handle MINIGAME_READY or REFRESH_STATS
-          if (msg.type === "MINIGAME_READY" || 
-              (msg.type === "MINIGAME_ACTION" && msg.action === "REFRESH_STATS")) { 
-            send({ 
-              type: "MINIGAME_DATA", 
-              userName: getUser().name, 
-              stats: await fetchStats() 
-            }); 
+      }
+
+      function sendBaseData(stats) {
+        send({
+          type: "MINIGAME_DATA",
+          userName: getUser().name,
+          stats: stats,
+          env: {
+            gameKey: CFG.gameKey,
+            mateId: CFG.mateId,
+            apiBase: CFG.apiBase,
+            questionPoolUrl: CFG.apiBase + "question-pool/" + encodeURIComponent(CFG.mateId) + "/",
+            isStudio: CFG.isStudio
           }
-          
-          // Handle SAVE_RESULT
-          if (msg.type === "MINIGAME_ACTION" && msg.action === "SAVE_RESULT") { 
-            await saveResult(msg.data); 
-            send({ 
-              type: "MINIGAME_DATA", 
-              userName: getUser().name, 
-              stats: await fetchStats() 
-            }); 
+        });
+      }
+
+      window.addEventListener("message", function(event) {
+        if (CFG.gameOrigin && event.origin !== CFG.gameOrigin) return;
+        const msg = event.data || {};
+
+        (async function() {
+          if (msg.type === "MINIGAME_READY" ||
+              (msg.type === "MINIGAME_ACTION" && msg.action === "REFRESH_STATS")) {
+            const st = await fetchStats();
+            sendBaseData(st);
+          }
+
+          if (msg.type === "MINIGAME_ACTION" && msg.action === "SAVE_RESULT") {
+            await saveResult(msg.data || {});
+            const st = await fetchStats();
+            sendBaseData(st);
+          }
+
+          if (msg.type === "MINIGAME_ACTION" &&
+              (msg.action === "FETCH_QUESTION_POOL" || msg.action === "GET_QUESTION_POOL")) {
+            const mid = (msg.data && msg.data.mateId) || msg.mateId || CFG.mateId;
+            try {
+              const qp = await fetchQuestionPool(mid);
+              send({ type: "MINIGAME_QUESTION_POOL", mateId: mid, payload: qp });
+            } catch(e) {
+              send({ type: "MINIGAME_QUESTION_POOL", mateId: mid, payload: null, error: String(e && e.message ? e.message : e) });
+            }
           }
         })();
       });
@@ -845,85 +625,55 @@
     <\/script>`;
   }
 
-  // ============================================================================
-  // 5) MAIN RENDER FUNCTION
-  // ============================================================================
-
-  /**
-   * Main render function - creates and manages the embed.
-   * @param {Object} options - Configuration options
-   */
   function render(options) {
-    // Merge options with defaults
     const config = Object.assign({}, DEFAULT_CONFIG, options || {});
-    
-    // Auto-detect minigame mode
     const isMinigame = !!config.gameUrl;
-    
-    // Set default theme for minigames if not specified
+
     if (isMinigame && (!options.themeName && !options.theme)) {
-      config.themeName = 'educational'; 
+      config.themeName = 'educational';
     }
 
-    // Destructure configuration
     const {
-      id, 
-      container: cNode, 
-      width, 
-      height, 
+      id,
+      container: cNode,
+      width,
+      height,
       aspect,
-      themeName, 
-      theme: tOverride, 
-      html, 
+      themeName,
+      theme: tOverride,
+      html,
       htmlGenerator,
-      headExtra, 
-      onReady, 
-      onThemeChange, 
+      headExtra,
+      onReady,
+      onThemeChange,
       fitMode,
       debug
     } = config;
 
-    // Get container element
     const container = cNode || (typeof id === 'string' ? document.getElementById(id) : null);
     if (!container) {
       console.error('[PiAI Engine] Container not found:', id);
       return;
     }
 
-    // Cleanup previous instance if exists
-    if (typeof container.__piaiCleanup === 'function') { 
-      try { 
-        container.__piaiCleanup(); 
-      } catch (_) {} 
-      container.__piaiCleanup = null; 
+    if (typeof container.__piaiCleanup === 'function') {
+      try { container.__piaiCleanup(); } catch (_) {}
+      container.__piaiCleanup = null;
     }
-    
-    // Ensure container has an ID
+
     const containerId = container.id || (typeof id === 'string' ? id : 'piai_' + Date.now());
     container.id = containerId;
 
-    debugLog('Initializing embed', { containerId, width, height, isMinigame }, debug);
+    const { isIOS } = detectDevice();
 
-    // Device detection
-    const { isIOS, isMobile } = detectDevice();
-    
-    // Theme setup
     let currentTheme = tOverride || getThemeByName(themeName);
     let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
     let baseCss = getBaseCss(currentTheme);
     let baseStyle = createBaseStyle(currentTheme, aspect);
 
-    // Clear container
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
-    
-    // Apply initial container style
+    while (container.firstChild) container.removeChild(container.firstChild);
     container.style.cssText = baseStyle.default;
 
-    // Create wrapper div for scaling
-    // This wrapper has the ORIGINAL dimensions (e.g., 1920x1080)
-    // and will be scaled down to fit the container
     const wrapper = document.createElement('div');
     wrapper.style.cssText = `
       position: absolute;
@@ -934,20 +684,18 @@
       transform-origin: 0 0;
     `.replace(/\s+/g, ' ').trim();
 
-    // Build context for HTML generators
-    const ctxBase = { 
-      id: containerId, 
-      embedId: containerId, 
-      width, 
-      height, 
-      aspect, 
-      theme: currentTheme, 
-      themeName: currentThemeName, 
-      baseCss, 
-      isIOS 
+    const ctxBase = {
+      id: containerId,
+      embedId: containerId,
+      width,
+      height,
+      aspect,
+      theme: currentTheme,
+      themeName: currentThemeName,
+      baseCss,
+      isIOS
     };
 
-    // Generate content HTML
     let finalHtml = '';
     if (isMinigame) {
       finalHtml = generateMinigameHTML(ctxBase, config);
@@ -956,42 +704,36 @@
       finalHtml = generator(Object.assign({}, ctxBase, { isStandalone: false }));
     }
 
-    // Handle fit mode
     const fitNorm = normalizeFitMode(fitMode);
-    const fitHead = fitNorm === 'no-scroll' 
-      ? `<script>(function(){try{document.documentElement.classList.add('piai-fit-noscroll');}catch(_){}})();<\/script>` 
+    const fitHead = fitNorm === 'no-scroll'
+      ? `<script>(function(){try{document.documentElement.classList.add('piai-fit-noscroll');}catch(_){}})();<\/script>`
       : '';
     const headExtraFinal = (headExtra || '') + fitHead;
 
-    // Bail if no content
     if (!finalHtml) {
       console.warn('[PiAI Engine] No content to render');
       return;
     }
-    
-    // Build final HTML document
+
     const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
 
-    // iOS standalone URL (for fullscreen workaround)
     let iosStandaloneUrl = '';
     if (isIOS && !isMinigame) {
       const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html;
       const standaloneRaw = generator(Object.assign({}, ctxBase, { isStandalone: true }));
-      if (standaloneRaw) { 
-        try { 
+      if (standaloneRaw) {
+        try {
           iosStandaloneUrl = URL.createObjectURL(
             new Blob([buildHtmlDocument(standaloneRaw, baseCss, headExtraFinal)], { type: 'text/html' })
-          ); 
+          );
         } catch (e) {
           debugLog('iOS standalone URL creation failed', e, debug);
-        } 
+        }
       }
     }
 
-    // Create blob URL for iframe src
     const blobUrl = URL.createObjectURL(new Blob([iframeHtml], { type: 'text/html' }));
-    
-    // Create iframe element
+
     const iframe = document.createElement('iframe');
     iframe.src = blobUrl;
     iframe.style.cssText = `
@@ -1005,286 +747,119 @@
     iframe.loading = 'lazy';
     iframe.sandbox = 'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
     iframe.allow = 'fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media';
-    
-    if (iosStandaloneUrl) {
-      iframe.dataset.iosStandaloneUrl = iosStandaloneUrl;
-    }
 
-    // Iframe load handler
+    if (iosStandaloneUrl) iframe.dataset.iosStandaloneUrl = iosStandaloneUrl;
+
     iframe.onload = function () {
-      // Clean up blob URL
-      try { 
-        URL.revokeObjectURL(blobUrl); 
-      } catch (_) {}
-      
-      // Send initialization messages to iframe
+      try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+
       if (iframe.contentWindow) {
-        // ================================================================
-        // MESSAGE 1: piaiInit (Handshake/Security)
-        // - Contains only ID and version for security validation
-        // ================================================================
-        iframe.contentWindow.postMessage({ 
-          type: 'piaiInit', 
-          id: containerId,
-          version: '3.12.0'
-        }, '*');
-
-        // ================================================================
-        // MESSAGE 2: piaiApplyTheme (UI Styling)
-        // - Contains theme data AND id for compatibility
-        // - v3.12.0 FIX: Added 'id' back for games that validate e.data.id
-        // ================================================================
-        iframe.contentWindow.postMessage({ 
-          type: 'piaiApplyTheme', 
-          id: containerId,  // <-- COMPATIBILITY FIX from v3.10.3
-          themeName: currentThemeName, 
-          theme: currentTheme 
-        }, '*');
+        iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.12.0' }, '*');
+        iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
       }
 
-      debugLog('Iframe loaded', { containerId }, debug);
-
-      // Call user callback
-      if (typeof onReady === 'function') {
-        onReady(iframe, ctxBase);
-      }
+      if (typeof onReady === 'function') onReady(iframe, ctxBase);
     };
 
-    // ========================================================================
-    // 6) SCALING & EVENT HANDLING
-    // ========================================================================
-    
-    let isFull = false;        // Fullscreen state
-    let resizeRAF = null;      // RAF handle for resize debouncing
+    let isFull = false;
+    let resizeRAF = null;
 
-    /**
-     * UPDATE SCALE - Core scaling logic (v3.12.0 Pixel Perfect)
-     * 
-     * KEY FEATURES:
-     * 1. NO ROUNDING of scale value - use full decimal precision
-     * 2. Container dimensions set EXACTLY to scaled content size
-     * 3. Transform origin at 0,0 for predictable positioning
-     * 
-     * WHY NO ROUNDING?
-     * - Math.floor causes gaps (content smaller than container)
-     * - Math.ceil causes overflow (content larger than container)
-     * - Exact value = pixel perfect fit
-     */
     const updateScale = () => {
-      // Get container dimensions
       const rect = container.getBoundingClientRect();
       const containerWidth = rect.width || container.clientWidth || width;
       const containerHeight = rect.height || container.clientHeight || height;
 
-      // Calculate scale factor
       let scale;
-      if (isFull) {
-        // Fullscreen: fit within available space (maintain aspect ratio)
-        scale = Math.min(containerWidth / width, containerHeight / height);
-      } else {
-        // Embed: scale to fit width exactly
-        scale = containerWidth / width;
-      }
-      
-      // Safety check
-      if (!Number.isFinite(scale) || scale <= 0) {
-        scale = 1;
-      }
+      if (isFull) scale = Math.min(containerWidth / width, containerHeight / height);
+      else scale = containerWidth / width;
 
-      // =====================================================================
-      // v3.12.0 PIXEL PERFECT: NO ROUNDING
-      // =====================================================================
-      // We use the EXACT scale value for pixel-perfect rendering.
-      // 
-      // Example with containerWidth = 360px, baseWidth = 1920px:
-      // - Exact scale = 0.1875
-      // - Math.floor(0.1875 * 1000) / 1000 = 0.187 → 359.04px → GAP!
-      // - Math.ceil(0.1875 * 1000) / 1000 = 0.188 → 360.96px → OVERFLOW!
-      // - Exact: 0.1875 → 360px → PERFECT!
-      // =====================================================================
+      if (!Number.isFinite(scale) || scale <= 0) scale = 1;
 
-      // Calculate exact content dimensions after scaling
       const contentWidth = width * scale;
       const contentHeight = height * scale;
 
-      debugLog('Scale calculation', { 
-        containerWidth, 
-        containerHeight, 
-        scale: scale.toFixed(6), 
-        contentWidth: contentWidth.toFixed(2), 
-        contentHeight: contentHeight.toFixed(2),
-        isFull 
-      }, debug);
-
       if (isFull) {
-        // =================================================================
-        // FULLSCREEN MODE
-        // =================================================================
-        // Center content within viewport
         const dx = (containerWidth - contentWidth) / 2;
         const dy = (containerHeight - contentHeight) / 2;
-        
         wrapper.style.transformOrigin = '0 0';
         wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-        
       } else {
-        // =================================================================
-        // EMBED MODE (v3.12.0 Pixel Perfect)
-        // =================================================================
-        // Set container height to EXACT content height.
-        // This eliminates any gap between CSS aspect-ratio and JS scaling.
-        // =================================================================
-        
-        // Set container height to exact scaled content height
         container.style.height = `${contentHeight}px`;
-        
-        // Position wrapper at origin (no centering needed in embed mode)
         wrapper.style.transformOrigin = '0 0';
         wrapper.style.transform = `scale(${scale})`;
       }
     };
 
-    /**
-     * Set fullscreen state
-     */
     const setFullscreen = (state) => {
       isFull = state;
       container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-      
-      // Update scale on next frame
       requestAnimationFrame(updateScale);
-      
-      // Notify iframe of fullscreen state
-      try { 
-        if (iframe.contentWindow) {
-          iframe.contentWindow.postMessage({ 
-            type: 'fullscreenState', 
-            id: containerId, 
-            isFullscreen: state 
-          }, '*'); 
-        }
+      try {
+        iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'fullscreenState', id: containerId, isFullscreen: state }, '*');
       } catch (_) {}
-      
-      debugLog('Fullscreen state changed', { state }, debug);
     };
 
-    /**
-     * Switch to next theme
-     */
     const switchTheme = () => {
-      // Find current theme index
       let idx = THEME_ORDER.indexOf(currentThemeName);
       if (idx < 0) idx = 0;
-      
-      // Move to next theme (cycle)
       currentThemeName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
       currentTheme = getThemeByName(currentThemeName);
       baseCss = getBaseCss(currentTheme);
       baseStyle = createBaseStyle(currentTheme, aspect);
-      
-      // Update container style
+
       container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
-      
-      // Update iframe background
       iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
-      
-      // Recalculate scale (in case container size changed)
+
       updateScale();
-      
-      // ================================================================
-      // Notify iframe of theme change
-      // v3.12.0 FIX: Include 'id' for compatibility with games that
-      // validate e.data.id before accepting theme updates
-      // ================================================================
-      try { 
-        if (iframe.contentWindow) {
-          iframe.contentWindow.postMessage({ 
-            type: 'piaiApplyTheme', 
-            id: containerId,  // <-- COMPATIBILITY FIX
-            themeName: currentThemeName, 
-            theme: currentTheme 
-          }, '*'); 
-        }
+
+      try {
+        iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
       } catch (_) {}
-      
-      // User callback
-      if (typeof onThemeChange === 'function') {
-        onThemeChange(currentThemeName, currentTheme);
-      }
-      
-      debugLog('Theme switched', { themeName: currentThemeName }, debug);
+
+      if (typeof onThemeChange === 'function') onThemeChange(currentThemeName, currentTheme);
     };
 
-    /**
-     * Handle postMessage events from iframe
-     */
     const onMessage = (e) => {
-      // Validate message has our container ID
       if (!e.data || e.data.id !== containerId) return;
-      
-      // Handle fullscreen toggle
+
       if (e.data.type === 'toggleFullscreen') {
-        if (isIOS) return; // Fullscreen not supported on iOS
-        
+        if (detectDevice().isIOS) return;
+
         if (document.fullscreenElement) {
           document.exitFullscreen();
         } else if (isFull) {
           setFullscreen(false);
         } else if (container.requestFullscreen) {
-          container.requestFullscreen()
-            .then(() => setFullscreen(true))
-            .catch(() => setFullscreen(true)); // Fallback to manual fullscreen
+          container.requestFullscreen().then(() => setFullscreen(true)).catch(() => setFullscreen(true));
         } else {
           setFullscreen(true);
         }
       }
-      
-      // Handle theme switch
-      if (e.data.type === 'switchTheme') {
-        switchTheme();
-      }
+
+      if (e.data.type === 'switchTheme') switchTheme();
     };
 
-    /**
-     * Handle native fullscreen change
-     */
     const onFullscreenChange = () => {
-      if (isIOS) return;
-      
-      if (document.fullscreenElement === container) {
-        setFullscreen(true);
-      } else if (isFull && !document.fullscreenElement) {
-        setFullscreen(false);
-      }
+      if (detectDevice().isIOS) return;
+      if (document.fullscreenElement === container) setFullscreen(true);
+      else if (isFull && !document.fullscreenElement) setFullscreen(false);
     };
 
-    /**
-     * Handle keyboard events (Escape to exit fullscreen)
-     */
     const onKeydown = (e) => {
-      if (e.key === 'Escape' && isFull && !document.fullscreenElement) {
-        setFullscreen(false);
-      }
+      if (e.key === 'Escape' && isFull && !document.fullscreenElement) setFullscreen(false);
     };
 
-    /**
-     * Handle resize events (debounced with RAF)
-     */
     const onResize = () => {
-      if (resizeRAF) {
-        cancelAnimationFrame(resizeRAF);
-      }
+      if (resizeRAF) cancelAnimationFrame(resizeRAF);
       resizeRAF = requestAnimationFrame(updateScale);
     };
 
-    // Register event listeners
     window.addEventListener('message', onMessage);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('keydown', onKeydown);
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
 
-    // MutationObserver to detect container removal
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
         for (const node of m.removedNodes) {
@@ -1298,81 +873,31 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    /**
-     * Cleanup function - removes all event listeners and URLs
-     */
     function cleanup() {
       window.removeEventListener('message', onMessage);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKeydown);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
-      
-      try { 
-        if (iosStandaloneUrl) {
-          URL.revokeObjectURL(iosStandaloneUrl); 
-        }
-      } catch (_) {}
-      
-      try { 
-        observer.disconnect(); 
-      } catch (_) {}
-      
-      debugLog('Cleanup complete', { containerId }, debug);
+      try { iosStandaloneUrl && URL.revokeObjectURL(iosStandaloneUrl); } catch (_) {}
+      try { observer.disconnect(); } catch (_) {}
     }
-    
-    // Store cleanup function on container for future re-renders
+
     container.__piaiCleanup = cleanup;
 
-    // ========================================================================
-    // 7) MOUNT & INITIAL RENDER
-    // ========================================================================
-    
-    // Mount iframe into wrapper
     wrapper.appendChild(iframe);
-    
-    // Mount wrapper into container
     container.appendChild(wrapper);
-    
-    // Initial scale calculation
     updateScale();
-    
+
     debugLog('Embed mounted successfully', { containerId, version: '3.12.0' }, debug);
   }
 
-  // ============================================================================
-  // 8) PUBLIC API EXPORT
-  // ============================================================================
-  
   global.PiaiEmbed = {
-    /**
-     * Engine version
-     */
     version: '3.12.0',
-    
-    /**
-     * Main render function
-     */
     render,
-    
-    /**
-     * Available themes
-     */
     themes: THEMES,
-    
-    /**
-     * Get theme by name
-     */
     getThemeByName,
-    
-    /**
-     * Get base CSS for a theme
-     */
     getBaseCss,
-    
-    /**
-     * Default configuration
-     */
     defaults: DEFAULT_CONFIG
   };
 
