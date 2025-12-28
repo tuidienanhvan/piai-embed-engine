@@ -1,21 +1,12 @@
 // piai-embed-engine.js
-// v3.13.0 – FIX SAVE_RESULT PAYLOAD STRUCTURE
+// v3.14.0 – SEND HISTORY TO GAME
 // ==============================================================================
 //
-// CHANGELOG v3.13.0:
+// CHANGELOG v3.14.0:
 // ------------------
-// 1. FIX: saveResult() now correctly handles full MinigameResultPayload from game
-//    - Game sends: { msgtype, tsms, payload: { email, score, ... } }
-//    - Engine now uses data.msgtype, data.tsms, data.payload instead of wrapping again
-//
-// 2. All other features from v3.12.0 preserved:
-//    - Pixel perfect scaling
-//    - Theme compatibility
-//    - iOS standalone URL support
-//    - Fullscreen toggle
-//    - Minigame bridge with cookie parsing, stats, and result saving
-//    - MutationObserver cleanup
-//    - Responsive resize handling
+// 1. fetchStats() now returns history array with both RESULT and PURCHASE records
+// 2. sendBaseData() includes history for game to display
+// 3. All previous features preserved
 //
 // ==============================================================================
 
@@ -71,7 +62,7 @@
     }
 
     function debugLog(message, data, debugEnabled) {
-        if (debugEnabled) console.log(`[PiAI Engine v3.13.0] ${message}`, data || '');
+        if (debugEnabled) console.log(`[PiAI Engine v3.14.0] ${message}`, data || '');
     }
 
     function safeOrigin(url) {
@@ -96,10 +87,6 @@
             if (!seen.has(vv)) { seen.add(vv); out.push(vv); }
         }
         return out;
-    }
-
-    function tpl(str, vars) {
-        return String(str).replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
     }
 
     function getBaseCss(theme) {
@@ -228,8 +215,7 @@
         }
 
         async function fetchTry(url, options){
-          const res = await fetch(url, options);
-          return res;
+          return await fetch(url, options);
         }
 
         async function apiAny(endpoint, options){
@@ -252,42 +238,66 @@
           throw lastErr || new Error("API Error");
         }
 
+        // =====================================================================
+        // FETCH STATS + HISTORY
+        // Returns: { playCount, bestScore, history: [...] }
+        // =====================================================================
         async function fetchStats(){
           try{
             const res = await apiAny("logs/");
             const data = await res.json();
             const rows = Array.isArray(data) ? data : (data.results || []);
+            
             let playCount = 0, bestScore = 0;
-            rows.forEach(item=>{
+            const history = [];  // All records for this game
+            
+            rows.forEach(item => {
               if(item.payload && item.payload.gameKey === CFG.gameKey){
-                playCount++;
-                const s = Number(item.payload.score || 0);
-                if(s > bestScore) bestScore = s;
+                // Count game results
+                if(item.msgtype === 'RESULT'){
+                  playCount++;
+                  const s = Number(item.payload.score || 0);
+                  if(s > bestScore) bestScore = s;
+                }
+                
+                // Add to history (both RESULT and PURCHASE)
+                history.push({
+                  id: item.id,
+                  msgtype: item.msgtype,
+                  tsms: item.tsms,
+                  payload: item.payload
+                });
               }
             });
-            return { playCount, bestScore };
+            
+            // Sort history by time descending (newest first)
+            history.sort((a, b) => (b.tsms || 0) - (a.tsms || 0));
+            
+            // Limit to 50 most recent
+            const recentHistory = history.slice(0, 50);
+            
+            log("fetchStats", { playCount, bestScore, historyCount: recentHistory.length });
+            
+            return { playCount, bestScore, history: recentHistory };
           }catch(e){
             log("fetchStats error", e);
-            return { playCount:0, bestScore:0 };
+            return { playCount: 0, bestScore: 0, history: [] };
           }
         }
 
         // =====================================================================
-        // FIX v3.13.0: saveResult now correctly handles full MinigameResultPayload
-        // Game sends: { msgtype: 'RESULT', tsms: ..., payload: { email, score, ... } }
+        // SAVE RESULT - Forward game payload to API
         // =====================================================================
         async function saveResult(data){
           try{
-            // Extract fields from game's MinigameResultPayload format
-            // data = { msgtype: 'RESULT', tsms: number, payload: { email, score, ... } }
             const innerPayload = data.payload || data;
             
             const body = {
               msgtype: data.msgtype || 'RESULT',
               tsms: data.tsms || Date.now(),
               payload: Object.assign({}, innerPayload, { 
-                userId: null,  // Override với null (server sẽ tự xác định từ session)
-                username: getUser().username  // Override với username từ cookie
+                userId: null,
+                username: getUser().username
               })
             };
 
@@ -308,8 +318,7 @@
         }
 
         function buildEndpoint(tpl, mateId){
-          return String(tpl)
-            .replaceAll("{mateId}", encodeURIComponent(mateId));
+          return String(tpl).replaceAll("{mateId}", encodeURIComponent(mateId));
         }
 
         async function fetchQuestionPool(mateId){
@@ -367,13 +376,28 @@
           }
         }
 
-        function sendBaseData(stats){
-          send({
-            type:"MINIGAME_DATA",
+        // =====================================================================
+        // SEND BASE DATA - Now includes history!
+        // =====================================================================
+        function sendBaseData(statsWithHistory){
+          const data = {
+            type: "MINIGAME_DATA",
             userName: getUser().name,
-            stats: stats,
-            env: { gameKey: CFG.gameKey, mateId: CFG.mateId, apiBase: CFG.apiBase || "", apiBases: CFG.apiBases }
-          });
+            stats: {
+              playCount: statsWithHistory.playCount,
+              bestScore: statsWithHistory.bestScore
+            },
+            history: statsWithHistory.history,  // 👈 NEW: Full history array
+            env: { 
+              gameKey: CFG.gameKey, 
+              mateId: CFG.mateId, 
+              apiBase: CFG.apiBase || "", 
+              apiBases: CFG.apiBases 
+            }
+          };
+          
+          log("sendBaseData", { stats: data.stats, historyCount: data.history.length });
+          send(data);
         }
 
         window.addEventListener("message", function(event){
@@ -416,7 +440,7 @@
 
         if (isMinigame && (!options.themeName && !options.theme)) config.themeName = 'educational';
 
-        const { id, container: cNode, width, height, aspect, themeName, theme: tOverride, html, htmlGenerator, headExtra, onReady, onThemeChange, fitMode, debug } = config;
+        const { id, container: cNode, width, height, themeName, theme: tOverride, html, htmlGenerator, headExtra, onReady, onThemeChange, fitMode, debug } = config;
 
         const container = cNode || (typeof id === 'string' ? document.getElementById(id) : null);
         if (!container) { console.error('[PiAI Engine] Container not found:', id); return; }
@@ -439,7 +463,7 @@
         const wrapper = document.createElement('div');
         wrapper.style.cssText = `position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform-origin:0 0;`;
 
-        const ctxBase = { id: containerId, embedId: containerId, width, height, aspect, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
+        const ctxBase = { id: containerId, embedId: containerId, width, height, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
 
         let finalHtml = '';
         if (isMinigame) finalHtml = generateMinigameHTML(ctxBase, config);
@@ -468,7 +492,7 @@
         iframe.onload = function () {
             try { URL.revokeObjectURL(blobUrl); } catch (_) { }
             if (iframe.contentWindow) {
-                iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.13.0' }, '*');
+                iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.14.0' }, '*');
                 iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
             }
             if (typeof onReady === 'function') onReady(iframe, ctxBase);
@@ -578,8 +602,8 @@
         wrapper.appendChild(iframe);
         container.appendChild(wrapper);
         updateScale();
-        debugLog('Embed mounted successfully', { containerId, version: '3.13.0' }, debug);
+        debugLog('Embed mounted successfully', { containerId, version: '3.14.0' }, debug);
     }
 
-    global.PiaiEmbed = { version: '3.13.0', render, themes: THEMES, getThemeByName, getBaseCss, defaults: DEFAULT_CONFIG };
+    global.PiaiEmbed = { version: '3.14.0', render, themes: THEMES, getThemeByName, getBaseCss, defaults: DEFAULT_CONFIG };
 })(window);
