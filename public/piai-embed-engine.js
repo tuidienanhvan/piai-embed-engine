@@ -11,86 +11,86 @@
 // ==============================================================================
 
 (function (global) {
-    'use strict';
+  'use strict';
 
-    const THEMES = {
-        classic: { name: 'classic', primary: '#800020', accent: '#b8860b', secondary: '#002b5c', bg: '#f9f7f5', text: '#002b4a', textLight: '#666666' },
-        educational: { name: 'educational', primary: '#2196F3', accent: '#FFC107', secondary: '#4CAF50', bg: '#FFFFFF', text: '#212121', textLight: '#757575' },
-        night: { name: 'night', primary: '#A1C2BD', accent: '#1D24CA', secondary: '#A8A1CE', bg: '#19183B', text: '#F9E8C9', textLight: '#9BA4B5' },
+  const THEMES = {
+    classic: { name: 'classic', primary: '#800020', accent: '#b8860b', secondary: '#002b5c', bg: '#f9f7f5', text: '#002b4a', textLight: '#666666' },
+    educational: { name: 'educational', primary: '#2196F3', accent: '#FFC107', secondary: '#4CAF50', bg: '#FFFFFF', text: '#212121', textLight: '#757575' },
+    night: { name: 'night', primary: '#A1C2BD', accent: '#1D24CA', secondary: '#A8A1CE', bg: '#19183B', text: '#F9E8C9', textLight: '#9BA4B5' },
+  };
+
+  const THEME_ORDER = Object.keys(THEMES);
+
+  const DEFAULT_CONFIG = {
+    width: 800,
+    height: 450,
+    aspect: '16 / 9',
+    themeName: 'classic',
+    headExtra: '',
+    fitMode: 'scroll',
+    header: true,
+    branding: true,
+    debug: false,
+
+    gameKey: '',
+    gameUrl: '',
+    gameOrigin: '',
+
+    mateId: 'math_lesson_001',
+    apiBase: '',
+    apiBases: null,
+    questionPoolEndpoints: null,
+  };
+
+  const SYSTEM_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+  const BASE_RADIUS = 16;
+
+  function detectDevice() {
+    const ua = navigator.userAgent || '';
+    return {
+      isIOS: /iPad|iPhone|iPod/.test(ua) && !window.MSStream,
+      isAndroid: /Android/i.test(ua),
+      isMobile: /Mobi|Android/i.test(ua),
     };
+  }
 
-    const THEME_ORDER = Object.keys(THEMES);
+  function getThemeByName(name) { return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName]; }
 
-    const DEFAULT_CONFIG = {
-        width: 800,
-        height: 450,
-        aspect: '16 / 9',
-        themeName: 'classic',
-        headExtra: '',
-        fitMode: 'scroll',
-        header: true,
-        branding: true,
-        debug: false,
+  function normalizeFitMode(mode) {
+    const m = String(mode || '').toLowerCase().trim();
+    return (m === 'no-scroll' || m === 'noscroll' || m === 'compact') ? 'no-scroll' : 'scroll';
+  }
 
-        gameKey: '',
-        gameUrl: '',
-        gameOrigin: '',
+  function debugLog(message, data, debugEnabled) {
+    if (debugEnabled) console.log(`[PiAI Engine v3.14.0] ${message}`, data || '');
+  }
 
-        mateId: 'math_lesson_001',
-        apiBase: '',
-        apiBases: null,
-        questionPoolEndpoints: null,
-    };
+  function safeOrigin(url) {
+    try { return new URL(url, window.location.href).origin; } catch (_) { return ''; }
+  }
 
-    const SYSTEM_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
-    const BASE_RADIUS = 16;
+  function normalizeApiBase(base, origin) {
+    const b = String(base || '').trim();
+    if (!b) return '';
+    if (/^https?:\/\//i.test(b)) return b.endsWith('/') ? b : (b + '/');
+    if (b.startsWith('/')) return (origin + b).replace(/\/+$/, '') + '/';
+    return (origin + '/' + b).replace(/\/+$/, '') + '/';
+  }
 
-    function detectDevice() {
-        const ua = navigator.userAgent || '';
-        return {
-            isIOS: /iPad|iPhone|iPod/.test(ua) && !window.MSStream,
-            isAndroid: /Android/i.test(ua),
-            isMobile: /Mobi|Android/i.test(ua),
-        };
+  function uniq(arr) {
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < arr.length; i++) {
+      const v = String(arr[i] || '').trim();
+      if (!v) continue;
+      const vv = v.endsWith('/') ? v : (v + '/');
+      if (!seen.has(vv)) { seen.add(vv); out.push(vv); }
     }
+    return out;
+  }
 
-    function getThemeByName(name) { return THEMES[name] || THEMES[DEFAULT_CONFIG.themeName]; }
-
-    function normalizeFitMode(mode) {
-        const m = String(mode || '').toLowerCase().trim();
-        return (m === 'no-scroll' || m === 'noscroll' || m === 'compact') ? 'no-scroll' : 'scroll';
-    }
-
-    function debugLog(message, data, debugEnabled) {
-        if (debugEnabled) console.log(`[PiAI Engine v3.14.0] ${message}`, data || '');
-    }
-
-    function safeOrigin(url) {
-        try { return new URL(url, window.location.href).origin; } catch (_) { return ''; }
-    }
-
-    function normalizeApiBase(base, origin) {
-        const b = String(base || '').trim();
-        if (!b) return '';
-        if (/^https?:\/\//i.test(b)) return b.endsWith('/') ? b : (b + '/');
-        if (b.startsWith('/')) return (origin + b).replace(/\/+$/, '') + '/';
-        return (origin + '/' + b).replace(/\/+$/, '') + '/';
-    }
-
-    function uniq(arr) {
-        const out = [];
-        const seen = new Set();
-        for (let i = 0; i < arr.length; i++) {
-            const v = String(arr[i] || '').trim();
-            if (!v) continue;
-            const vv = v.endsWith('/') ? v : (v + '/');
-            if (!seen.has(vv)) { seen.add(vv); out.push(vv); }
-        }
-        return out;
-    }
-
-    function getBaseCss(theme) {
-        return `
+  function getBaseCss(theme) {
+    return `
       :root { --piai-primary:${theme.primary}; --piai-accent:${theme.accent}; --piai-secondary:${theme.secondary}; --piai-bg:${theme.bg}; --piai-text:${theme.text}; --piai-text-light:${theme.textLight}; }
       *{margin:0;padding:0;box-sizing:border-box;}
       html,body{width:100%;height:100%;}
@@ -106,62 +106,62 @@
       @keyframes spin{to{transform:rotate(360deg);}}
       .MathJax,mjx-container{transform:none!important;}
     `;
+  }
+
+  function buildHtmlDocument(content, baseCss, headExtra) {
+    if (!content) return '';
+    const inject = `<style>${baseCss}</style>${headExtra || ''}`;
+    if (/<!doctype html/i.test(content)) {
+      if (content.includes('</head>')) return content.replace('</head>', inject + '</head>');
+      return inject + content;
     }
+    return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">${inject}</head><body>${content}</body></html>`;
+  }
 
-    function buildHtmlDocument(content, baseCss, headExtra) {
-        if (!content) return '';
-        const inject = `<style>${baseCss}</style>${headExtra || ''}`;
-        if (/<!doctype html/i.test(content)) {
-            if (content.includes('</head>')) return content.replace('</head>', inject + '</head>');
-            return inject + content;
-        }
-        return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">${inject}</head><body>${content}</body></html>`;
+  function createBaseStyle(theme) {
+    const borderCol = (theme.primary || '#800020') + '26';
+    return {
+      default: `width:100%;max-width:100%;display:block;position:relative;box-sizing:border-box;border-radius:${BASE_RADIUS}px;border:1px solid ${borderCol};overflow:hidden;background:transparent;`,
+      fullscreen: `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;box-sizing:border-box;margin:0;border-radius:0;z-index:99999;background:#000;border:none;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);`,
+    };
+  }
+
+  function generateMinigameHTML(ctx, config) {
+    const origin = window.location.origin;
+    const gameUrl = config.gameUrl;
+    const gameOrigin = config.gameOrigin || safeOrigin(gameUrl);
+    const mateId = config.mateId || DEFAULT_CONFIG.mateId;
+
+    const cookieRaw = document.cookie || '';
+    const safeCookie = cookieRaw.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
+
+    const bases = [];
+    if (Array.isArray(config.apiBases)) {
+      for (let i = 0; i < config.apiBases.length; i++) bases.push(normalizeApiBase(config.apiBases[i], origin));
     }
+    const abs = normalizeApiBase(config.apiBase, origin);
+    if (abs) bases.push(abs);
 
-    function createBaseStyle(theme) {
-        const borderCol = (theme.primary || '#800020') + '26';
-        return {
-            default: `width:100%;max-width:100%;display:block;position:relative;box-sizing:border-box;border-radius:${BASE_RADIUS}px;border:1px solid ${borderCol};overflow:hidden;background:transparent;`,
-            fullscreen: `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;box-sizing:border-box;margin:0;border-radius:0;z-index:99999;background:#000;border:none;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);`,
-        };
-    }
+    bases.push(origin + '/api/minigames/');
+    bases.push('https://apps.pistudy.vn/api/minigames/');
+    bases.push('https://pistudy.vn/api/minigames/');
 
-    function generateMinigameHTML(ctx, config) {
-        const origin = window.location.origin;
-        const gameUrl = config.gameUrl;
-        const gameOrigin = config.gameOrigin || safeOrigin(gameUrl);
-        const mateId = config.mateId || DEFAULT_CONFIG.mateId;
+    const apiBases = uniq(bases);
 
-        const cookieRaw = document.cookie || '';
-        const safeCookie = cookieRaw.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
+    const defaultEndpoints = [
+      'question-pool/{mateId}/',
+      'question_pool/{mateId}/',
+      'question-pool/?mate_id={mateId}',
+      'question_pool/?mate_id={mateId}',
+      'question-pool/{mateId}',
+      'question_pool/{mateId}',
+    ];
 
-        const bases = [];
-        if (Array.isArray(config.apiBases)) {
-            for (let i = 0; i < config.apiBases.length; i++) bases.push(normalizeApiBase(config.apiBases[i], origin));
-        }
-        const abs = normalizeApiBase(config.apiBase, origin);
-        if (abs) bases.push(abs);
+    const eps = Array.isArray(config.questionPoolEndpoints) && config.questionPoolEndpoints.length
+      ? config.questionPoolEndpoints
+      : defaultEndpoints;
 
-        bases.push(origin + '/api/minigames/');
-        bases.push('https://apps.pistudy.vn/api/minigames/');
-        bases.push('https://pistudy.vn/api/minigames/');
-
-        const apiBases = uniq(bases);
-
-        const defaultEndpoints = [
-            'question-pool/{mateId}/',
-            'question_pool/{mateId}/',
-            'question-pool/?mate_id={mateId}',
-            'question_pool/?mate_id={mateId}',
-            'question-pool/{mateId}',
-            'question_pool/{mateId}',
-        ];
-
-        const eps = Array.isArray(config.questionPoolEndpoints) && config.questionPoolEndpoints.length
-            ? config.questionPoolEndpoints
-            : defaultEndpoints;
-
-        return `
+    return `
       <div class="piai-wrap" style="background:transparent;">
         <div class="piai-loader" id="loader"><div class="loader-inner"><div class="spinner"></div><div>Đang tải...</div></div></div>
         <main class="piai-body no-pad">
@@ -432,178 +432,260 @@
       })();
       <\/script>
     `;
+  }
+
+  function render(options) {
+    const config = Object.assign({}, DEFAULT_CONFIG, options || {});
+    const isMinigame = !!config.gameUrl;
+
+    if (isMinigame && (!options.themeName && !options.theme)) config.themeName = 'educational';
+
+    const { id, container: cNode, width, height, themeName, theme: tOverride, html, htmlGenerator, headExtra, onReady, onThemeChange, fitMode, debug } = config;
+
+    const container = cNode || (typeof id === 'string' ? document.getElementById(id) : null);
+    if (!container) { console.error('[PiAI Engine] Container not found:', id); return; }
+
+    if (typeof container.__piaiCleanup === 'function') { try { container.__piaiCleanup(); } catch (_) { } container.__piaiCleanup = null; }
+
+    const containerId = container.id || (typeof id === 'string' ? id : 'piai_' + Date.now());
+    container.id = containerId;
+
+    const { isIOS } = detectDevice();
+
+    let currentTheme = tOverride || getThemeByName(themeName);
+    let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
+    let baseCss = getBaseCss(currentTheme);
+    let baseStyle = createBaseStyle(currentTheme);
+
+    while (container.firstChild) container.removeChild(container.firstChild);
+    container.style.cssText = baseStyle.default;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform-origin:0 0;`;
+
+    const ctxBase = { id: containerId, embedId: containerId, width, height, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
+
+    let finalHtml = '';
+    if (isMinigame) finalHtml = generateMinigameHTML(ctxBase, config);
+    else {
+      const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html || '';
+      finalHtml = generator(Object.assign({}, ctxBase, { isStandalone: false }));
     }
 
-    function render(options) {
-        const config = Object.assign({}, DEFAULT_CONFIG, options || {});
-        const isMinigame = !!config.gameUrl;
+    const fitNorm = normalizeFitMode(fitMode);
+    const fitHead = fitNorm === 'no-scroll' ? `<script>(function(){try{document.documentElement.classList.add('piai-fit-noscroll');}catch(_){}})();<\/script>` : '';
+    const headExtraFinal = (headExtra || '') + fitHead;
 
-        if (isMinigame && (!options.themeName && !options.theme)) config.themeName = 'educational';
+    if (!finalHtml) { console.warn('[PiAI Engine] No content to render'); return; }
 
-        const { id, container: cNode, width, height, themeName, theme: tOverride, html, htmlGenerator, headExtra, onReady, onThemeChange, fitMode, debug } = config;
+    const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
+    const blobUrl = URL.createObjectURL(new Blob([iframeHtml], { type: 'text/html' }));
 
-        const container = cNode || (typeof id === 'string' ? document.getElementById(id) : null);
-        if (!container) { console.error('[PiAI Engine] Container not found:', id); return; }
+    const iframe = document.createElement('iframe');
+    iframe.src = blobUrl;
+    iframe.style.cssText = `width:100%;height:100%;border:none;display:block;background:${isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5')};`;
+    iframe.scrolling = 'no';
+    iframe.loading = 'lazy';
+    iframe.sandbox = 'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
+    iframe.allow = 'fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media';
 
-        if (typeof container.__piaiCleanup === 'function') { try { container.__piaiCleanup(); } catch (_) { } container.__piaiCleanup = null; }
+    iframe.onload = function () {
+      try { URL.revokeObjectURL(blobUrl); } catch (_) { }
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.14.0' }, '*');
+        iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
+      }
+      if (typeof onReady === 'function') onReady(iframe, ctxBase);
+    };
 
-        const containerId = container.id || (typeof id === 'string' ? id : 'piai_' + Date.now());
-        container.id = containerId;
+    let isFull = false;
+    let resizeRAF = null;
+    let lastScale = 1;
+    let baseHeight = 0;
 
+    // Check if user is actively editing text (keyboard likely open)
+    const isTextEditing = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+      if (el instanceof HTMLInputElement) {
+        const textTypes = ['text', 'password', 'email', 'search', 'tel', 'url', 'number'];
+        return textTypes.includes(el.type);
+      }
+      if (el instanceof HTMLTextAreaElement) return true;
+      if (el instanceof HTMLElement && el.isContentEditable) return true;
+      return false;
+    };
+
+    const updateScale = () => {
+      // Use window dimensions like useScaler hook
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // Track base height when not editing
+      if (!isTextEditing() && vh > 0) {
+        baseHeight = vh;
+      }
+
+      // Detect keyboard open: editing + height reduced significantly (>150px)
+      const isKeyboardOpen = isTextEditing() && baseHeight > 0 && (baseHeight - vh) > 150;
+
+      let scale;
+      if (isKeyboardOpen) {
+        // Freeze scale when keyboard is open
+        scale = lastScale;
+      } else {
+        // Always use fit-to-screen formula like useScaler
+        scale = Math.min(vw / width, vh / height);
+        if (!Number.isFinite(scale) || scale <= 0) scale = lastScale || 1;
+        lastScale = scale;
+      }
+
+      // Calculate centered position like useScaler
+      const scaledW = width * scale;
+      const scaledH = height * scale;
+      const x = (vw - scaledW) / 2;
+      const y = (vh - scaledH) / 2;
+
+      if (isFull) {
+        // In fullscreen: center content
+        wrapper.style.transformOrigin = '0 0';
+        wrapper.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+      } else {
+        // Normal mode: adjust container height and scale
+        container.style.height = `${scaledH}px`;
+        wrapper.style.transformOrigin = '0 0';
+        wrapper.style.transform = `scale(${scale})`;
+      }
+    };
+
+    const setFullscreen = (state) => {
+      isFull = state;
+      container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
+      requestAnimationFrame(updateScale);
+      try { iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'fullscreenState', id: containerId, isFullscreen: state }, '*'); } catch (_) { }
+    };
+
+    const switchTheme = () => {
+      let idx = THEME_ORDER.indexOf(currentThemeName);
+      if (idx < 0) idx = 0;
+      currentThemeName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
+      currentTheme = getThemeByName(currentThemeName);
+      baseCss = getBaseCss(currentTheme);
+      baseStyle = createBaseStyle(currentTheme);
+      container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
+      iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
+      updateScale();
+      try { iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*'); } catch (_) { }
+      if (typeof onThemeChange === 'function') onThemeChange(currentThemeName, currentTheme);
+    };
+
+    // Toggle fullscreen logic matching useFullscreen hook
+    const onMessage = (e) => {
+      if (!e.data || e.data.id !== containerId) return;
+
+      if (e.data.type === 'toggleFullscreen') {
         const { isIOS } = detectDevice();
 
-        let currentTheme = tOverride || getThemeByName(themeName);
-        let currentThemeName = currentTheme.name || themeName || DEFAULT_CONFIG.themeName;
-        let baseCss = getBaseCss(currentTheme);
-        let baseStyle = createBaseStyle(currentTheme);
-
-        while (container.firstChild) container.removeChild(container.firstChild);
-        container.style.cssText = baseStyle.default;
-
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = `position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform-origin:0 0;`;
-
-        const ctxBase = { id: containerId, embedId: containerId, width, height, theme: currentTheme, themeName: currentThemeName, baseCss, isIOS };
-
-        let finalHtml = '';
-        if (isMinigame) finalHtml = generateMinigameHTML(ctxBase, config);
-        else {
-            const generator = typeof htmlGenerator === 'function' ? htmlGenerator : () => html || '';
-            finalHtml = generator(Object.assign({}, ctxBase, { isStandalone: false }));
+        // iOS: Open game URL in new tab for true fullscreen experience
+        // iOS Safari doesn't support Fullscreen API - new tab gives best UX
+        if (isIOS) {
+          window.open(iframe.src, '_blank');
+          return;
         }
 
-        const fitNorm = normalizeFitMode(fitMode);
-        const fitHead = fitNorm === 'no-scroll' ? `<script>(function(){try{document.documentElement.classList.add('piai-fit-noscroll');}catch(_){}})();<\/script>` : '';
-        const headExtraFinal = (headExtra || '') + fitHead;
+        // Non-iOS: Try native fullscreen API with fallback
+        const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
 
-        if (!finalHtml) { console.warn('[PiAI Engine] No content to render'); return; }
-
-        const iframeHtml = buildHtmlDocument(finalHtml, baseCss, headExtraFinal);
-        const blobUrl = URL.createObjectURL(new Blob([iframeHtml], { type: 'text/html' }));
-
-        const iframe = document.createElement('iframe');
-        iframe.src = blobUrl;
-        iframe.style.cssText = `width:100%;height:100%;border:none;display:block;background:${isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5')};`;
-        iframe.scrolling = 'no';
-        iframe.loading = 'lazy';
-        iframe.sandbox = 'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
-        iframe.allow = 'fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media';
-
-        iframe.onload = function () {
-            try { URL.revokeObjectURL(blobUrl); } catch (_) { }
-            if (iframe.contentWindow) {
-                iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.14.0' }, '*');
-                iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
-            }
-            if (typeof onReady === 'function') onReady(iframe, ctxBase);
-        };
-
-        let isFull = false;
-        let resizeRAF = null;
-
-        const updateScale = () => {
-            const rect = container.getBoundingClientRect();
-            const containerWidth = rect.width || container.clientWidth || width;
-            const containerHeight = rect.height || container.clientHeight || height;
-
-            let scale = isFull ? Math.min(containerWidth / width, containerHeight / height) : (containerWidth / width);
-            if (!Number.isFinite(scale) || scale <= 0) scale = 1;
-
-            const contentWidth = width * scale;
-            const contentHeight = height * scale;
-
-            if (isFull) {
-                const dx = (containerWidth - contentWidth) / 2;
-                const dy = (containerHeight - contentHeight) / 2;
-                wrapper.style.transformOrigin = '0 0';
-                wrapper.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-            } else {
-                container.style.height = `${contentHeight}px`;
-                wrapper.style.transformOrigin = '0 0';
-                wrapper.style.transform = `scale(${scale})`;
-            }
-        };
-
-        const setFullscreen = (state) => {
-            isFull = state;
-            container.style.cssText = state ? baseStyle.fullscreen : baseStyle.default;
-            requestAnimationFrame(updateScale);
-            try { iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'fullscreenState', id: containerId, isFullscreen: state }, '*'); } catch (_) { }
-        };
-
-        const switchTheme = () => {
-            let idx = THEME_ORDER.indexOf(currentThemeName);
-            if (idx < 0) idx = 0;
-            currentThemeName = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
-            currentTheme = getThemeByName(currentThemeName);
-            baseCss = getBaseCss(currentTheme);
-            baseStyle = createBaseStyle(currentTheme);
-            container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
-            iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
-            updateScale();
-            try { iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*'); } catch (_) { }
-            if (typeof onThemeChange === 'function') onThemeChange(currentThemeName, currentTheme);
-        };
-
-        const onMessage = (e) => {
-            if (!e.data || e.data.id !== containerId) return;
-            if (e.data.type === 'toggleFullscreen') {
-                if (detectDevice().isIOS) return;
-                if (document.fullscreenElement) document.exitFullscreen();
-                else if (isFull) setFullscreen(false);
-                else if (container.requestFullscreen) container.requestFullscreen().then(() => setFullscreen(true)).catch(() => setFullscreen(true));
-                else setFullscreen(true);
-            }
-            if (e.data.type === 'switchTheme') switchTheme();
-        };
-
-        const onFullscreenChange = () => {
-            if (detectDevice().isIOS) return;
-            if (document.fullscreenElement === container) setFullscreen(true);
-            else if (isFull && !document.fullscreenElement) setFullscreen(false);
-        };
-
-        const onKeydown = (e) => { if (e.key === 'Escape' && isFull && !document.fullscreenElement) setFullscreen(false); };
-
-        const onResize = () => {
-            if (resizeRAF) cancelAnimationFrame(resizeRAF);
-            resizeRAF = requestAnimationFrame(updateScale);
-        };
-
-        window.addEventListener('message', onMessage);
-        document.addEventListener('fullscreenchange', onFullscreenChange);
-        document.addEventListener('keydown', onKeydown);
-        window.addEventListener('resize', onResize);
-        window.addEventListener('orientationchange', onResize);
-
-        const observer = new MutationObserver((mutations) => {
-            for (const m of mutations) {
-                for (const node of m.removedNodes) {
-                    if (node === container || (node.contains && node.contains(container))) {
-                        cleanup();
-                        observer.disconnect();
-                        return;
-                    }
-                }
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-
-        function cleanup() {
-            window.removeEventListener('message', onMessage);
-            document.removeEventListener('fullscreenchange', onFullscreenChange);
-            document.removeEventListener('keydown', onKeydown);
-            window.removeEventListener('resize', onResize);
-            window.removeEventListener('orientationchange', onResize);
-            try { observer.disconnect(); } catch (_) { }
+        if (!fsElement) {
+          // Request fullscreen
+          if (container.requestFullscreen) {
+            container.requestFullscreen()
+              .then(() => setFullscreen(true))
+              .catch(() => setFullscreen(true)); // CSS fallback on error
+          } else if (container.webkitRequestFullscreen) {
+            container.webkitRequestFullscreen();
+            setFullscreen(true);
+          } else {
+            // No API available, use CSS fallback
+            setFullscreen(true);
+          }
+        } else {
+          // Exit fullscreen
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+          setFullscreen(false);
         }
+      }
 
-        container.__piaiCleanup = cleanup;
-        wrapper.appendChild(iframe);
-        container.appendChild(wrapper);
-        updateScale();
-        debugLog('Embed mounted successfully', { containerId, version: '3.14.0' }, debug);
+      if (e.data.type === 'switchTheme') switchTheme();
+    };
+
+    // Fullscreen change handler matching useFullscreen hook
+    const onFullscreenChange = () => {
+      const { isIOS } = detectDevice();
+      const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+
+      // Sync state: If we have a native FS element and it matches our container
+      if (fsElement && fsElement === container) {
+        setFullscreen(true);
+      } else if (!fsElement && !isIOS) {
+        // Only set false if NOT iOS (iOS uses CSS mode)
+        setFullscreen(false);
+      }
+    };
+
+    // Escape key handler - only for iOS CSS fullscreen mode
+    const onKeydown = (e) => {
+      const { isIOS } = detectDevice();
+      if (e.key === 'Escape' && isFull && isIOS) {
+        setFullscreen(false);
+      }
+    };
+
+    const onResize = () => {
+      if (resizeRAF) cancelAnimationFrame(resizeRAF);
+      resizeRAF = requestAnimationFrame(updateScale);
+    };
+
+    window.addEventListener('message', onMessage);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.addEventListener('keydown', onKeydown);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.removedNodes) {
+          if (node === container || (node.contains && node.contains(container))) {
+            cleanup();
+            observer.disconnect();
+            return;
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    function cleanup() {
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      document.removeEventListener('keydown', onKeydown);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      try { observer.disconnect(); } catch (_) { }
     }
 
-    global.PiaiEmbed = { version: '3.14.0', render, themes: THEMES, getThemeByName, getBaseCss, defaults: DEFAULT_CONFIG };
+    container.__piaiCleanup = cleanup;
+    wrapper.appendChild(iframe);
+    container.appendChild(wrapper);
+    updateScale();
+    debugLog('Embed mounted successfully', { containerId, version: '3.14.0' }, debug);
+  }
+
+  global.PiaiEmbed = { version: '3.14.0', render, themes: THEMES, getThemeByName, getBaseCss, defaults: DEFAULT_CONFIG };
 })(window);
