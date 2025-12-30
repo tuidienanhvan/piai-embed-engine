@@ -533,6 +533,11 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       const containerWidth = isFull ? window.innerWidth : (rect.width || container.clientWidth || width);
       const containerHeight = isFull ? window.innerHeight : (rect.height || container.clientHeight || height);
 
+      // Skip if container has no valid dimensions yet (during layout transitions)
+      if (containerWidth <= 0 || !Number.isFinite(containerWidth)) {
+        return; // Wait for valid layout
+      }
+
       let scale;
       if (isFull) {
         // Fullscreen: fit within viewport (maintain aspect ratio)
@@ -544,8 +549,15 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
 
       // Safety check
       if (!Number.isFinite(scale) || scale <= 0) {
-        scale = 1;
+        scale = lastScale || 1;
       }
+
+      // Avoid micro-updates that cause flicker (threshold 0.5%)
+      if (Math.abs(scale - lastScale) < 0.005 && lastScale > 0) {
+        return;
+      }
+
+      lastScale = scale;
 
       // Calculate dimensions
       const scaledW = width * scale;
@@ -657,12 +669,21 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       resizeRAF = requestAnimationFrame(updateScale);
     };
 
+    // Mobile orientation change needs delay for layout to stabilize
+    const onOrientationChange = () => {
+      if (resizeRAF) cancelAnimationFrame(resizeRAF);
+      // Delay to let browser stabilize layout after rotation
+      setTimeout(() => {
+        resizeRAF = requestAnimationFrame(updateScale);
+      }, 200);
+    };
+
     window.addEventListener('message', onMessage);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
     document.addEventListener('keydown', onKeydown);
     window.addEventListener('resize', onResize);
-    window.addEventListener('orientationchange', onResize);
+    window.addEventListener('orientationchange', onOrientationChange);
 
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
@@ -683,7 +704,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKeydown);
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('orientationchange', onResize);
+      window.removeEventListener('orientationchange', onOrientationChange);
       try { observer.disconnect(); } catch (_) { }
     }
 
@@ -691,8 +712,8 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     wrapper.appendChild(iframe);
     container.appendChild(wrapper);
     updateScale();
-    debugLog('Embed mounted successfully', { containerId, version: '3.14.0' }, debug);
+    debugLog('Embed mounted successfully', { containerId, version: '3.15.1' }, debug);
   }
 
-  global.PiaiEmbed = { version: '3.14.0', render, themes: THEMES, getThemeByName, getBaseCss, defaults: DEFAULT_CONFIG };
+  global.PiaiEmbed = { version: '3.15.1', render, themes: THEMES, getThemeByName, getBaseCss, defaults: DEFAULT_CONFIG };
 })(window);
