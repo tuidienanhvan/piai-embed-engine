@@ -1,13 +1,13 @@
 // piai-embed-engine.js
-// v3.14.0 – SEND HISTORY TO GAME
+// v3.15.0 – ADD EMAIL AND USERID FROM JWT
 // ==============================================================================
 //
-// CHANGELOG v3.14.0:
+// CHANGELOG v3.15.0:
 // ------------------
-// 1. fetchStats() now returns history array with both RESULT and PURCHASE records
-// 2. sendBaseData() includes history for game to display
-// 3. All previous features preserved
-//
+// 1. getUser() now extracts email and userId from JWT cookie
+// 2. saveResult() includes email and userId in payload
+// 3. sendBaseData() sends userEmail and userId to game iframe
+// 4. Fixes highscores API validation error (email required)
 // ==============================================================================
 
 (function (global) {
@@ -193,13 +193,15 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         }
 
         function getUser(){
-          let user = { name:"Khách", username:"guest" };
+          let user = { name:"Khách", username:"guest", email:"", userId:null };
           const jwt = getCookie("edx-jwt-cookie-header-payload");
           if(jwt){
             try{
               const payload = JSON.parse(atob(jwt.split(".")[1]));
               user.name = payload.name || payload.preferred_username;
               user.username = payload.preferred_username;
+              user.email = payload.email || '';
+              user.userId = payload.user_id || null;
               return user;
             }catch(e){}
           }
@@ -293,13 +295,15 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         async function saveResult(data){
           try{
             const innerPayload = data.payload || data;
+            const currentUser = getUser();
             
             const body = {
               msgtype: data.msgtype || 'RESULT',
               tsms: data.tsms || Date.now(),
               payload: Object.assign({}, innerPayload, { 
-                userId: null,
-                username: getUser().username
+                userId: currentUser.userId,
+                username: currentUser.username,
+                email: currentUser.email
               })
             };
 
@@ -382,9 +386,12 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         // SEND BASE DATA - Now includes history!
         // =====================================================================
         function sendBaseData(statsWithHistory){
+          const currentUser = getUser();
           const data = {
             type: "MINIGAME_DATA",
-            userName: getUser().name,
+            userName: currentUser.name,
+            userEmail: currentUser.email,
+            userId: currentUser.userId,
             stats: {
               playCount: statsWithHistory.playCount,
               bestScore: statsWithHistory.bestScore
