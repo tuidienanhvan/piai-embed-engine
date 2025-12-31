@@ -218,6 +218,77 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           return user;
         }
 
+        // =====================================================================
+        // GET COURSE ID (clientid) - Logic từ game mẫu Đua Xe
+        // =====================================================================
+        function getCourseId(){
+          // 1. Try from window.location pathname (parent)
+          try{
+            var path = window.location && window.location.pathname ? window.location.pathname : '';
+            var parts = path.split('/');
+            for(var i=0; i<parts.length; i++){
+              var seg = parts[i];
+              if(!seg) continue;
+              if(seg.indexOf('course-v1:') === 0) return seg;
+              if(seg.indexOf('block-v1:') === 0){
+                var s = seg.substring('block-v1:'.length);
+                var tp = s.indexOf('+type');
+                var coursePart = tp !== -1 ? s.substring(0, tp) : s;
+                if(coursePart) return 'course-v1:' + coursePart;
+              }
+            }
+          }catch(e){}
+
+          // 2. Try from document.referrer
+          try{
+            var referrer = document.referrer || '';
+            if(referrer){
+              var url = new URL(referrer);
+              var rParts = url.pathname.split('/');
+              for(var j=0; j<rParts.length; j++){
+                var segR = rParts[j];
+                if(!segR) continue;
+                if(segR.indexOf('course-v1:') === 0) return segR;
+                if(segR.indexOf('block-v1:') === 0){
+                  var ss = segR.substring('block-v1:'.length);
+                  var tpos = ss.indexOf('+type');
+                  var cpart = tpos !== -1 ? ss.substring(0, tpos) : ss;
+                  if(cpart) return 'course-v1:' + cpart;
+                }
+              }
+            }
+          }catch(e){}
+
+          // 3. Try from ancestor frames (same-origin)
+          try{
+            var anc = window;
+            var depth = 0;
+            while(anc && anc !== anc.parent && depth < 6){
+              try{
+                var ap = anc.location && anc.location.pathname ? anc.location.pathname : '';
+                if(ap){
+                  var aparts = ap.split('/');
+                  for(var k=0; k<aparts.length; k++){
+                    var segA = aparts[k];
+                    if(!segA) continue;
+                    if(segA.indexOf('course-v1:') === 0) return segA;
+                    if(segA.indexOf('block-v1:') === 0){
+                      var sss = segA.substring('block-v1:'.length);
+                      var tpos2 = sss.indexOf('+type');
+                      var cpart2 = tpos2 !== -1 ? sss.substring(0, tpos2) : sss;
+                      if(cpart2) return 'course-v1:' + cpart2;
+                    }
+                  }
+                }
+              }catch(e){}
+              try{ anc = anc.parent; }catch(e){ break; }
+              depth++;
+            }
+          }catch(e){}
+
+          // 4. Fallback: return empty string
+          return '';
+        }
         async function fetchTry(url, options){
           return await fetch(url, options);
         }
@@ -318,14 +389,19 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           try{
             const innerPayload = data.payload || data;
             const currentUser = getUser();
+            const courseId = getCourseId();
             
             const body = {
               msgtype: data.msgtype || 'RESULT',
               tsms: data.tsms || Date.now(),
               payload: Object.assign({}, innerPayload, { 
+                // User info từ cookie
                 userId: currentUser.userId,
                 username: currentUser.username,
-                email: currentUser.email
+                email: currentUser.email,
+                // Course/Game info (Engine thêm tự động)
+                clientid: courseId ? encodeURIComponent(String(courseId)) : '',
+                gameKey: innerPayload.gameKey || innerPayload.appid || CFG.gameKey
               })
             };
 
