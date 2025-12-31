@@ -290,6 +290,28 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         }
 
         // =====================================================================
+        // FETCH USER STATS (total_coins, total_xp, level)
+        // =====================================================================
+        async function fetchUserStats(){
+          try{
+            const res = await apiAny("user-stats/");
+            const data = await res.json();
+            
+            log("fetchUserStats", data);
+            
+            return {
+              total_coins: data.total_coins || 0,
+              total_xp: data.total_xp || 0,
+              level: data.level || 0
+            };
+          }catch(e){
+            log("fetchUserStats error", e);
+            return { total_coins: 0, total_xp: 0, level: 0 };
+          }
+        }
+
+
+        // =====================================================================
         // SAVE RESULT - Forward game payload to API
         // =====================================================================
         async function saveResult(data){
@@ -383,20 +405,23 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         }
 
         // =====================================================================
-        // SEND BASE DATA - Now includes history!
+        // SEND BASE DATA - Now includes history and user balance!
         // =====================================================================
-        function sendBaseData(statsWithHistory){
+        function sendBaseData(statsWithHistory, userStats){
           const currentUser = getUser();
           const data = {
             type: "MINIGAME_DATA",
             userName: currentUser.name,
             userEmail: currentUser.email,
             userId: currentUser.userId,
+            total_coins: userStats ? userStats.total_coins : 0,  // 👈 NEW: Balance from user-stats
+            total_xp: userStats ? userStats.total_xp : 0,
+            level: userStats ? userStats.level : 0,
             stats: {
               playCount: statsWithHistory.playCount,
               bestScore: statsWithHistory.bestScore
             },
-            history: statsWithHistory.history,  // 👈 NEW: Full history array
+            history: statsWithHistory.history,
             env: { 
               gameKey: CFG.gameKey, 
               mateId: CFG.mateId, 
@@ -405,7 +430,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             }
           };
           
-          log("sendBaseData", { stats: data.stats, historyCount: data.history.length });
+          log("sendBaseData", { stats: data.stats, total_coins: data.total_coins, historyCount: data.history.length });
           send(data);
         }
 
@@ -417,14 +442,16 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             if(msg.type === "MINIGAME_READY" || (msg.type === "MINIGAME_ACTION" && msg.action === "REFRESH_STATS")){
               log("Received MINIGAME_READY or REFRESH_STATS");
               const st = await fetchStats();
-              sendBaseData(st);
+              const us = await fetchUserStats();
+              sendBaseData(st, us);
             }
 
             if(msg.type === "MINIGAME_ACTION" && msg.action === "SAVE_RESULT"){
               log("Received SAVE_RESULT", msg.data);
               await saveResult(msg.data || {});
               const st = await fetchStats();
-              sendBaseData(st);
+              const us = await fetchUserStats();
+              sendBaseData(st, us);
             }
 
             if(msg.type === "MINIGAME_ACTION" && (msg.action === "FETCH_QUESTION_POOL" || msg.action === "GET_QUESTION_POOL")){
