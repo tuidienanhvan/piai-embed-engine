@@ -387,23 +387,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         // =====================================================================
         async function saveResult(data){
           try{
-            const innerPayload = data.payload || data;
-            const currentUser = getUser();
-            const courseId = getCourseId();
-            
-            const body = {
-              msgtype: data.msgtype || 'RESULT',
-              tsms: data.tsms || Date.now(),
-              payload: Object.assign({}, innerPayload, { 
-                // User info từ cookie
-                userId: currentUser.userId,
-                username: currentUser.username,
-                email: currentUser.email,
-                // Course/Game info (Engine thêm tự động)
-                clientid: courseId ? encodeURIComponent(String(courseId)) : '',
-                gameKey: innerPayload.gameKey || innerPayload.appid || CFG.gameKey
-              })
-            };
+            const body = data;
 
             log("saveResult body", body);
 
