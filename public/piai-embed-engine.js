@@ -471,8 +471,9 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           const currentUser = getUser();
           const data = {
             type: "MINIGAME_DATA",
-            userName: currentUser.name,
-            userEmail: currentUser.email,
+            name: currentUser.name,
+            username: currentUser.username,  // preferred_username từ JWT
+            email: currentUser.email,
             userId: currentUser.userId,
             total_coins: userStats ? userStats.total_coins : 0,  // 👈 NEW: Balance from user-stats
             total_xp: userStats ? userStats.total_xp : 0,
