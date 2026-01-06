@@ -1,13 +1,13 @@
 // piai-embed-engine.js
-// v3.15.0 – ADD EMAIL AND USERID FROM JWT
+// v3.15.1 – FIX THEME SWITCH BUG (container height lost)
 // ==============================================================================
 //
-// CHANGELOG v3.15.0:
+// CHANGELOG v3.15.1:
 // ------------------
-// 1. getUser() now extracts email and userId from JWT cookie
-// 2. saveResult() includes email and userId in payload
-// 3. sendBaseData() sends userEmail and userId to game iframe
-// 4. Fixes highscores API validation error (email required)
+// 1. FIX: switchTheme() no longer overwrites container.style.cssText completely
+//    - Now preserves height set by updateScale()
+//    - Only updates border color which is the only theme-dependent property
+// 2. All v3.15.0 features preserved (email, userId from JWT)
 // ==============================================================================
 
 (function (global) {
@@ -62,7 +62,7 @@
   }
 
   function debugLog(message, data, debugEnabled) {
-    if (debugEnabled) console.log(`[PiAI Engine v3.14.0] ${message}`, data || '');
+    if (debugEnabled) console.log(`[PiAI Engine v3.15.1] ${message}`, data || '');
   }
 
   function safeOrigin(url) {
@@ -120,8 +120,15 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">${inject}</head><body>${content}</body></html>`;
   }
 
+  // ========================================================================
+  // FIX v3.15.1: Separate border color calculation for theme switching
+  // ========================================================================
+  function getBorderColor(theme) {
+    return (theme.primary || '#800020') + '26';
+  }
+
   function createBaseStyle(theme) {
-    const borderCol = (theme.primary || '#800020') + '26';
+    const borderCol = getBorderColor(theme);
     return {
       default: `width:100%;max-width:100%;display:block;position:relative;box-sizing:border-box;border-radius:${BASE_RADIUS}px;border:1px solid ${borderCol};overflow:hidden;background:transparent;`,
       fullscreen: `position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;box-sizing:border-box;margin:0;border-radius:0;z-index:99999;background:#000;border:none;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);`,
@@ -218,11 +225,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           return user;
         }
 
-        // =====================================================================
-        // GET COURSE ID (clientid) - Logic từ game mẫu Đua Xe
-        // =====================================================================
         function getCourseId(){
-          // 1. Try from window.location pathname (parent)
           try{
             var path = window.location && window.location.pathname ? window.location.pathname : '';
             var parts = path.split('/');
@@ -239,7 +242,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             }
           }catch(e){}
 
-          // 2. Try from document.referrer
           try{
             var referrer = document.referrer || '';
             if(referrer){
@@ -259,7 +261,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             }
           }catch(e){}
 
-          // 3. Try from ancestor frames (same-origin)
           try{
             var anc = window;
             var depth = 0;
@@ -286,7 +287,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             }
           }catch(e){}
 
-          // 4. Fallback: return empty string
           return '';
         }
         async function fetchTry(url, options){
@@ -313,10 +313,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           throw lastErr || new Error("API Error");
         }
 
-        // =====================================================================
-        // FETCH STATS + HISTORY
-        // Returns: { playCount, bestScore, history: [...] }
-        // =====================================================================
         async function fetchStats(){
           try{
             const res = await apiAny("logs/");
@@ -324,18 +320,16 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             const rows = Array.isArray(data) ? data : (data.results || []);
             
             let playCount = 0, bestScore = 0;
-            const history = [];  // All records for this game
+            const history = [];
             
             rows.forEach(item => {
               if(item.payload && item.payload.gameKey === CFG.gameKey){
-                // Count game results
                 if(item.msgtype === 'RESULT'){
                   playCount++;
                   const s = Number(item.payload.score || 0);
                   if(s > bestScore) bestScore = s;
                 }
                 
-                // Add to history (both RESULT and PURCHASE)
                 history.push({
                   id: item.id,
                   msgtype: item.msgtype,
@@ -345,10 +339,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
               }
             });
             
-            // Sort history by time descending (newest first)
             history.sort((a, b) => (b.tsms || 0) - (a.tsms || 0));
-            
-            // Limit to 50 most recent
             const recentHistory = history.slice(0, 50);
             
             log("fetchStats", { playCount, bestScore, historyCount: recentHistory.length });
@@ -360,9 +351,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           }
         }
 
-        // =====================================================================
-        // FETCH USER STATS (total_coins, total_xp, level)
-        // =====================================================================
         async function fetchUserStats(){
           try{
             const res = await apiAny("user-stats/");
@@ -381,10 +369,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           }
         }
 
-
-        // =====================================================================
-        // SAVE RESULT - Forward game payload to API
-        // =====================================================================
         async function saveResult(data){
           try{
             const body = data;
@@ -464,18 +448,15 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           }
         }
 
-        // =====================================================================
-        // SEND BASE DATA - Now includes history and user balance!
-        // =====================================================================
         function sendBaseData(statsWithHistory, userStats){
           const currentUser = getUser();
           const data = {
             type: "MINIGAME_DATA",
             name: currentUser.name,
-            username: currentUser.username,  // preferred_username từ JWT
+            username: currentUser.username,
             email: currentUser.email,
             userId: currentUser.userId,
-            total_coins: userStats ? userStats.total_coins : 0,  // 👈 NEW: Balance from user-stats
+            total_coins: userStats ? userStats.total_coins : 0,
             total_xp: userStats ? userStats.total_xp : 0,
             level: userStats ? userStats.level : 0,
             stats: {
@@ -589,7 +570,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     iframe.onload = function () {
       try { URL.revokeObjectURL(blobUrl); } catch (_) { }
       if (iframe.contentWindow) {
-        iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.14.0' }, '*');
+        iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.15.1' }, '*');
         iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
       }
       if (typeof onReady === 'function') onReady(iframe, ctxBase);
@@ -600,7 +581,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     let lastScale = 1;
     let baseHeight = 0;
 
-    // Check if user is actively editing text (keyboard likely open)
     const isTextEditing = () => {
       const el = document.activeElement;
       if (!el) return false;
@@ -614,51 +594,41 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
     };
 
     const updateScale = () => {
-      // Get dimensions based on mode
       const rect = container.getBoundingClientRect();
 
-      // Fullscreen: use window, Embed: use container width
       const containerWidth = isFull ? window.innerWidth : (rect.width || container.clientWidth || width);
       const containerHeight = isFull ? window.innerHeight : (rect.height || container.clientHeight || height);
 
-      // Skip if container has no valid dimensions yet (during layout transitions)
       if (containerWidth <= 0 || !Number.isFinite(containerWidth)) {
-        return; // Wait for valid layout
+        return;
       }
 
       let scale;
       if (isFull) {
-        // Fullscreen: fit within viewport (maintain aspect ratio)
         scale = Math.min(containerWidth / width, containerHeight / height);
       } else {
-        // Embed: scale to fit container width exactly
         scale = containerWidth / width;
       }
 
-      // Safety check
       if (!Number.isFinite(scale) || scale <= 0) {
         scale = lastScale || 1;
       }
 
-      // Avoid micro-updates that cause flicker (threshold 0.5%)
       if (Math.abs(scale - lastScale) < 0.005 && lastScale > 0) {
         return;
       }
 
       lastScale = scale;
 
-      // Calculate dimensions
       const scaledW = width * scale;
       const scaledH = height * scale;
 
       if (isFull) {
-        // Fullscreen: center content in viewport
         const x = (containerWidth - scaledW) / 2;
         const y = (containerHeight - scaledH) / 2;
         wrapper.style.transformOrigin = '0 0';
         wrapper.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
       } else {
-        // Embed: set container height to scaled height, scale from top-left
         container.style.height = `${scaledH}px`;
         wrapper.style.transformOrigin = '0 0';
         wrapper.style.transform = `scale(${scale})`;
@@ -672,6 +642,9 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       try { iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'fullscreenState', id: containerId, isFullscreen: state }, '*'); } catch (_) { }
     };
 
+    // ========================================================================
+    // FIX v3.15.1: switchTheme now preserves container height
+    // ========================================================================
     const switchTheme = () => {
       let idx = THEME_ORDER.indexOf(currentThemeName);
       if (idx < 0) idx = 0;
@@ -679,45 +652,51 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       currentTheme = getThemeByName(currentThemeName);
       baseCss = getBaseCss(currentTheme);
       baseStyle = createBaseStyle(currentTheme);
-      container.style.cssText = isFull ? baseStyle.fullscreen : baseStyle.default;
+      
+      // ======================================================================
+      // FIX: Instead of overwriting entire cssText, only update border color
+      // This preserves the height set by updateScale()
+      // ======================================================================
+      if (isFull) {
+        // Fullscreen mode: safe to overwrite entire cssText (has fixed height)
+        container.style.cssText = baseStyle.fullscreen;
+      } else {
+        // Embed mode: only update border color to preserve height
+        const borderCol = getBorderColor(currentTheme);
+        container.style.borderColor = borderCol;
+      }
+      
       iframe.style.background = isMinigame ? 'transparent' : (currentTheme.bg || '#f9f7f5');
       updateScale();
       try { iframe.contentWindow && iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*'); } catch (_) { }
       if (typeof onThemeChange === 'function') onThemeChange(currentThemeName, currentTheme);
     };
 
-    // Toggle fullscreen logic matching useFullscreen hook
     const onMessage = (e) => {
       if (!e.data || e.data.id !== containerId) return;
 
       if (e.data.type === 'toggleFullscreen') {
         const { isIOS } = detectDevice();
 
-        // iOS: Open game URL in new tab for true fullscreen experience
-        // iOS Safari doesn't support Fullscreen API - new tab gives best UX
         if (isIOS) {
           window.open(iframe.src, '_blank');
           return;
         }
 
-        // Non-iOS: Try native fullscreen API with fallback
         const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
 
         if (!fsElement) {
-          // Request fullscreen
           if (container.requestFullscreen) {
             container.requestFullscreen()
               .then(() => setFullscreen(true))
-              .catch(() => setFullscreen(true)); // CSS fallback on error
+              .catch(() => setFullscreen(true));
           } else if (container.webkitRequestFullscreen) {
             container.webkitRequestFullscreen();
             setFullscreen(true);
           } else {
-            // No API available, use CSS fallback
             setFullscreen(true);
           }
         } else {
-          // Exit fullscreen
           if (document.exitFullscreen) {
             document.exitFullscreen();
           } else if (document.webkitExitFullscreen) {
@@ -730,21 +709,17 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       if (e.data.type === 'switchTheme') switchTheme();
     };
 
-    // Fullscreen change handler matching useFullscreen hook
     const onFullscreenChange = () => {
       const { isIOS } = detectDevice();
       const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
 
-      // Sync state: If we have a native FS element and it matches our container
       if (fsElement && fsElement === container) {
         setFullscreen(true);
       } else if (!fsElement && !isIOS) {
-        // Only set false if NOT iOS (iOS uses CSS mode)
         setFullscreen(false);
       }
     };
 
-    // Escape key handler - only for iOS CSS fullscreen mode
     const onKeydown = (e) => {
       const { isIOS } = detectDevice();
       if (e.key === 'Escape' && isFull && isIOS) {
@@ -757,10 +732,8 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       resizeRAF = requestAnimationFrame(updateScale);
     };
 
-    // Mobile orientation change needs delay for layout to stabilize
     const onOrientationChange = () => {
       if (resizeRAF) cancelAnimationFrame(resizeRAF);
-      // Delay to let browser stabilize layout after rotation
       setTimeout(() => {
         resizeRAF = requestAnimationFrame(updateScale);
       }, 200);
