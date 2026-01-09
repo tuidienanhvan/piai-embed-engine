@@ -13,11 +13,35 @@
 (function (global) {
   'use strict';
 
-  const THEMES = {
-    classic: { name: 'classic', primary: '#800020', accent: '#b8860b', secondary: '#002b5c', bg: '#f9f7f5', text: '#002b4a', textLight: '#666666' },
-    educational: { name: 'educational', primary: '#2196F3', accent: '#FFC107', secondary: '#4CAF50', bg: '#FFFFFF', text: '#212121', textLight: '#757575' },
-    night: { name: 'night', primary: '#A1C2BD', accent: '#1D24CA', secondary: '#A8A1CE', bg: '#19183B', text: '#F9E8C9', textLight: '#9BA4B5' },
-  };
+const THEMES = {
+  classic: { 
+    name: 'classic', 
+    primary: '#800020',   // Burgundy - giữ nguyên, contrast tốt
+    accent: '#C9A227',    // Vàng đậm hơn, nổi bật hơn
+    secondary: '#1E4D78', // Xanh navy sáng hơn, dễ đọc
+    bg: '#FAF8F5',        // Kem nhạt, dịu mắt hơn
+    text: '#2D3748',      // Xám đậm, chuyên nghiệp
+    textLight: '#718096'  // Xám trung, contrast tốt
+  },
+  educational: { 
+    name: 'educational', 
+    primary: '#1976D2',   // Xanh dương đậm hơn, pro hơn
+    accent: '#FF9800',    // Cam sáng, nổi bật hơn vàng
+    secondary: '#388E3C', // Xanh lá đậm hơn, dễ đọc
+    bg: '#FAFAFA',        // Xám rất nhạt, ko chói
+    text: '#1A1A1A',      // Đen gần hoàn toàn
+    textLight: '#5F6368'  // Xám Google style
+  },
+  night: { 
+    name: 'night', 
+    primary: '#64FFDA',   // Cyan sáng - nổi bật trên nền tối
+    accent: '#FFD54F',    // Vàng sáng - DỄ THẤY trên nền tối
+    secondary: '#B39DDB', // Tím lavender sáng hơn
+    bg: '#0D1421',        // Xanh đen - đẹp hơn tím
+    text: '#E8EAED',      // Trắng xám - dịu mắt
+    textLight: '#9AA0A6'  // Xám sáng
+  },
+};
 
   const THEME_ORDER = Object.keys(THEMES);
 
