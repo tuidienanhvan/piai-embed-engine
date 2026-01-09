@@ -34,12 +34,12 @@ const THEMES = {
   },
   night: { 
     name: 'night', 
-    primary: '#64FFDA',   // Cyan sáng - nổi bật trên nền tối
-    accent: '#FFD54F',    // Vàng sáng - DỄ THẤY trên nền tối
-    secondary: '#B39DDB', // Tím lavender sáng hơn
-    bg: '#0D1421',        // Xanh đen - đẹp hơn tím
-    text: '#E8EAED',      // Trắng xám - dịu mắt
-    textLight: '#9AA0A6'  // Xám sáng
+    primary: '#79B8A4',   // Xanh ngọc nhạt - dịu mắt
+    accent: '#E6A86C',    // Cam đất ấm áp - không chói
+    secondary: '#9A8FC2', // Tím nhạt pastel
+    bg: '#1E1E2E',        // Xám xanh đen - như VS Code
+    text: '#CDD6F4',      // Xám xanh nhạt
+    textLight: '#7F849C'  // Xám trung
   },
 };
 
