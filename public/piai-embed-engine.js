@@ -38,8 +38,8 @@ const THEMES = {
     accent: '#E6A86C',    // Cam đất ấm áp - không chói
     secondary: '#9A8FC2', // Tím nhạt pastel
     bg: '#1E1E2E',        // Xám xanh đen - như VS Code
-    text: '#CDD6F4',      // Xám xanh nhạt
-    textLight: '#7F849C'  // Xám trung
+    text: '#E8E6E3',      // Trắng kem ấm - khác với xám lạnh của 2 theme kia
+    textLight: '#A8A5A0'  // Xám nâu ấm - dễ chịu hơn ban đêm
   },
 };
 
