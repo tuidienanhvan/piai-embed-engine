@@ -35,7 +35,7 @@ const THEMES = {
   night: { 
     name: 'night', 
     primary: '#79B8A4',   // Xanh ngọc nhạt - dịu mắt
-    accent: '#E6A86C',    // Cam đất ấm áp - không chói
+    accent: '#FF4081',    // Hồng
     secondary: '#9A8FC2', // Tím nhạt pastel
     bg: '#1E1E2E',        // Xám xanh đen - như VS Code
     text: '#E8E6E3',      // Trắng kem ấm - khác với xám lạnh của 2 theme kia
