@@ -1,30 +1,21 @@
 // ==============================================================================
-// PiAI Embed Engine v3.16.1
+// PiAI Embed Engine v3.18.0
 // ==============================================================================
-// CHANGELOG v3.16.1:
+// CHANGELOG v3.18.0:
 // ------------------
-// 1. NEW: CDN optimization for multiple components
-//    - Global script cache prevents duplicate CDN requests
-//    - Preload hints for JSXGraph, MathJax, Lucide
-//    - Shared window.__piaiCDN registry across all instances
-// 2. All v3.16.0 features preserved (memory leak fix, 16:10, 16px fonts)
+// 1. BREAKING: Replace mateId with questionPoolConfig
+//    - questionPoolConfig: { taxo_subject, taxo_section, taxo_subsection, quantity }
+// 2. REMOVE: apiBases, questionPoolEndpoints (game calls API directly now)
+// 3. NEW: Pass questionPoolConfig to game via postMessage
+// 4. All v3.17.0 features preserved (lazy loading, service worker, memory monitoring)
 //
-// CHANGELOG v3.16.0:
+// CHANGELOG v3.17.0:
 // ------------------
-// 1. FIX: Memory leak when rendering multiple components
-//    - Blob URLs now properly revoked in cleanup (100ms delay instead of 500ms)
-//    - Iframe src cleared before removal
-//    - Improved event listener cleanup
-//    - Added blob URL to cleanup scope
-// 2. CHANGE: Aspect ratio updated to 16:10 (800x500)
-//    - Better fit for educational content
-//    - Changed from 16:9 (800x450)
-// 3. FIX: Font sizes increased for readability
-//    - Body text: 16px minimum (was implicit/smaller)
-//    - Header text: 18px (was implicit)
-//    - All components: 16px minimum
-//    - Line height: 1.6 for better readability
-// 4. All v3.15.1 features preserved (email, userId from JWT, border color fix)
+// 1. CHANGE: Aspect ratio reverted to 16:9 (800x450)
+// 2. NEW: renderLazy() for lazy loading components
+// 3. NEW: Service Worker auto-registration for CDN caching
+// 4. NEW: Mobile CSS optimizations (tap-highlight, touch-action)
+// 5. NEW: Memory monitoring in debug mode
 // ==============================================================================
 
 (function (global) {
@@ -33,39 +24,38 @@
     const THEMES = {
         classic: {
             name: 'classic',
-            primary: '#800020',   // Burgundy - giữ nguyên, contrast tốt
-            accent: '#C9A227',    // Vàng đậm hơn, nổi bật hơn
-            secondary: '#1E4D78', // Xanh navy sáng hơn, dễ đọc
-            bg: '#FAF8F5',        // Kem nhạt, dịu mắt hơn
-            text: '#2D3748',      // Xám đậm, chuyên nghiệp
-            textLight: '#718096'  // Xám trung, contrast tốt
+            primary: '#800020',
+            accent: '#C9A227',
+            secondary: '#1E4D78',
+            bg: '#FAF8F5',
+            text: '#2D3748',
+            textLight: '#718096'
         },
         educational: {
             name: 'educational',
-            primary: '#1976D2',   // Xanh dương đậm hơn, pro hơn
-            accent: '#FF9800',    // Cam sáng, nổi bật hơn vàng
-            secondary: '#388E3C', // Xanh lá đậm hơn, dễ đọc
-            bg: '#FAFAFA',        // Xám rất nhạt, ko chói
-            text: '#1A1A1A',      // Đen gần hoàn toàn
-            textLight: '#5F6368'  // Xám Google style
+            primary: '#1976D2',
+            accent: '#FF9800',
+            secondary: '#388E3C',
+            bg: '#FAFAFA',
+            text: '#1A1A1A',
+            textLight: '#5F6368'
         },
         night: {
             name: 'night',
-            primary: '#79B8A4',   // Xanh ngọc nhạt - dịu mắt
-            accent: '#FF4081',    // Hồng
-            secondary: '#9A8FC2', // Tím nhạt pastel
-            bg: '#1E1E2E',        // Xám xanh đen - như VS Code
-            text: '#E8E6E3',      // Trắng kem ấm - khác với xám lạnh của 2 theme kia
-            textLight: '#A8A5A0'  // Xám nâu ấm - dễ chịu hơn ban đêm
+            primary: '#79B8A4',
+            accent: '#FF4081',
+            secondary: '#9A8FC2',
+            bg: '#1E1E2E',
+            text: '#E8E6E3',
+            textLight: '#A8A5A0'
         },
     };
 
-    const THEME_ORDER = Object.keys(THEMES);
+    const THEME_ORDER = ['educational', 'classic', 'night'];
 
     // ==============================================================================
-    // CDN OPTIMIZATION v3.16.1
+    // CDN OPTIMIZATION
     // ==============================================================================
-    // Pinned CDN URLs for consistency and caching
     const CDN_REGISTRY = {
         jsxgraph: {
             core: 'https://cdn.jsdelivr.net/npm/jsxgraph@1.5.0/distrib/jsxgraphcore.js',
@@ -75,7 +65,6 @@
         lucide: 'https://unpkg.com/lucide@0.294.0/dist/umd/lucide.min.js'
     };
 
-    // Global cache to prevent duplicate CDN requests across multiple instances
     if (!window.__piaiCDN) {
         window.__piaiCDN = {
             loaded: new Set(),
@@ -112,20 +101,20 @@
                 head.appendChild(link);
             }
         });
+
+        if ('serviceWorker' in navigator && !window.__piaiSWRegistered) {
+            window.__piaiSWRegistered = true;
+            navigator.serviceWorker.register('/piai-sw.js', { scope: '/' }).catch(() => { });
+        }
     }
 
     function loadCDNScript(url) {
-        // Check if already loaded
         if (window.__piaiCDN.loaded.has(url)) {
             return Promise.resolve(true);
         }
-
-        // Check if currently loading
         if (window.__piaiCDN.loading.has(url)) {
             return window.__piaiCDN.loading.get(url);
         }
-
-        // Start loading
         const promise = new Promise((resolve, reject) => {
             const existing = document.querySelector(`script[src="${url}"]`);
             if (existing) {
@@ -133,26 +122,21 @@
                 resolve(true);
                 return;
             }
-
             const script = document.createElement('script');
             script.src = url;
             script.crossOrigin = 'anonymous';
             script.async = true;
-
             script.onload = () => {
                 window.__piaiCDN.loaded.add(url);
                 window.__piaiCDN.loading.delete(url);
                 resolve(true);
             };
-
             script.onerror = () => {
                 window.__piaiCDN.loading.delete(url);
                 reject(new Error(`Failed to load ${url}`));
             };
-
             document.head.appendChild(script);
         });
-
         window.__piaiCDN.loading.set(url, promise);
         return promise;
     }
@@ -161,11 +145,9 @@
         if (window.__piaiCDN.loaded.has(url)) {
             return Promise.resolve(true);
         }
-
         if (window.__piaiCDN.loading.has(url)) {
             return window.__piaiCDN.loading.get(url);
         }
-
         const promise = new Promise((resolve) => {
             const existing = document.querySelector(`link[href="${url}"]`);
             if (existing) {
@@ -173,7 +155,6 @@
                 resolve(true);
                 return;
             }
-
             const link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = url;
@@ -186,37 +167,42 @@
                 window.__piaiCDN.loading.delete(url);
                 resolve(false);
             };
-
             document.head.appendChild(link);
         });
-
         window.__piaiCDN.loading.set(url, promise);
         return promise;
     }
 
-    // Auto-preload on first render call
     let preloadInitialized = false;
-    // ==============================================================================
 
+    // ==============================================================================
+    // CONFIG - v3.18.0: New questionPoolConfig
+    // ==============================================================================
     const DEFAULT_CONFIG = {
         width: 800,
-        height: 500,          // CHANGED v3.16.0: Was 450 (16:9) → Now 500 (16:10)
-        aspect: '16 / 10',    // CHANGED v3.16.0: Was '16 / 9'
-        themeName: 'classic',
+        height: 450,
+        aspect: '16 / 9',
+        themeName: 'educational',
         headExtra: '',
         fitMode: 'scroll',
         header: true,
         branding: true,
         debug: false,
 
+        lazy: false,
+        lazyThreshold: 200,
+
         gameKey: '',
         gameUrl: '',
         gameOrigin: '',
 
-        mateId: 'math_lesson_001',
-        apiBase: '',
-        apiBases: null,
-        questionPoolEndpoints: null,
+        // v3.18.0: New questionPoolConfig (replaces mateId)
+        questionPoolConfig: {
+            taxo_subject: 'AIPRO_6',
+            taxo_section: 'MODULE_1_AI_DOI_SONG',
+            taxo_subsection: 'BAI_1_AI_QUANH_TA',
+            quantity: 15
+        }
     };
 
     const SYSTEM_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
@@ -239,52 +225,27 @@
     }
 
     function debugLog(message, data, debugEnabled) {
-        if (debugEnabled) console.log(`[PiAI Engine v3.16.1] ${message}`, data || '');
+        if (debugEnabled) console.log(`[PiAI Engine v3.18.0] ${message}`, data || '');
     }
 
     function safeOrigin(url) {
         try { return new URL(url, window.location.href).origin; } catch (_) { return ''; }
     }
 
-    function normalizeApiBase(base, origin) {
-        const b = String(base || '').trim();
-        if (!b) return '';
-        if (/^https?:\/\//i.test(b)) return b.endsWith('/') ? b : (b + '/');
-        if (b.startsWith('/')) return (origin + b).replace(/\/+$/, '') + '/';
-        return (origin + '/' + b).replace(/\/+$/, '') + '/';
-    }
-
-    function uniq(arr) {
-        const out = [];
-        const seen = new Set();
-        for (let i = 0; i < arr.length; i++) {
-            const v = String(arr[i] || '').trim();
-            if (!v) continue;
-            const vv = v.endsWith('/') ? v : (v + '/');
-            if (!seen.has(vv)) { seen.add(vv); out.push(vv); }
-        }
-        return out;
-    }
-
     function getBaseCss(theme) {
-        // CHANGED v3.16.0: Added font-size: 16px to body, 18px to header, line-height: 1.6
-        return `:root{--piai-primary:${theme.primary};--piai-accent:${theme.accent};--piai-secondary:${theme.secondary};--piai-bg:${theme.bg};--piai-text:${theme.text};--piai-text-light:${theme.textLight}}*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%}body{font-family:${SYSTEM_FONT_STACK};font-size:16px;line-height:1.6;color:var(--piai-text);background:transparent;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}.piai-wrap{width:100%;height:100%;background:var(--piai-bg);display:flex;flex-direction:column;overflow:hidden;position:relative;isolation:isolate}
-/* STANDARD UI (THEORY) */
+        return `:root{--piai-primary:${theme.primary};--piai-accent:${theme.accent};--piai-secondary:${theme.secondary};--piai-bg:${theme.bg};--piai-text:${theme.text};--piai-text-light:${theme.textLight}}*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{width:100%;height:100%}body{font-family:${SYSTEM_FONT_STACK};font-size:16px;line-height:1.6;color:var(--piai-text);background:transparent;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}.piai-wrap{width:100%;height:100%;background:var(--piai-bg);display:flex;flex-direction:column;overflow:hidden;position:relative;isolation:isolate}
 .piai-hdr{background:var(--piai-primary);color:#fff;padding:12px 20px;padding-right:130px;font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.2;border-bottom:3px solid var(--piai-accent);position:relative}
 .piai-hdr svg{width:20px;height:20px;display:block;flex:0 0 auto}
-.piai-body{flex:1;padding:15px 20px;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:1;font-size:16px}
+.piai-body{flex:1;padding:15px 20px;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:1;font-size:16px;-webkit-overflow-scrolling:touch}
 .piai-body>*{margin-bottom:15px}.piai-body>*:last-child{margin-bottom:0}
 .piai-body::-webkit-scrollbar{width:6px}.piai-body::-webkit-scrollbar-thumb{background:var(--piai-text-light);border-radius:3px}
-/* MINIGAME UI (FULLSCREEN) */
 .piai-body.no-pad{padding:0!important;overflow:hidden!important;width:100%;height:100%}
 iframe.game-frame{border:none;width:100%;height:100%;display:block}
-/* COMPONENTS */
 .piai-def{background:var(--piai-bg);border-left:5px solid var(--piai-primary);padding:12px 18px;border-radius:0 8px 8px 0;transition:box-shadow .25s ease;font-size:16px}.piai-def-title{color:var(--piai-primary);font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px;line-height:1.25;margin-bottom:6px}.piai-grid{display:flex;flex:1;min-height:0;gap:20px}.piai-list{flex:1;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;padding-right:26px;padding-left:6px}.piai-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:8px;background:var(--piai-bg);border-radius:10px;box-shadow:inset 0 0 0 1px var(--piai-text-light);transition:box-shadow .18s ease;font-size:16px}.piai-list-item:hover{box-shadow:inset 0 0 0 2px var(--piai-accent),0 2px 8px rgba(0,0,0,0.08)}.piai-list-item .piai-ico{color:var(--piai-accent);width:24px;height:24px;flex:0 0 24px;display:flex;align-items:center;justify-content:center}.piai-visual{flex:0 0 280px;display:flex;align-items:center;justify-content:center}
-/* UTILS */
 .hdr-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:999;width:48px;height:48px;background:transparent;border:none;cursor:pointer;color:var(--piai-accent);display:flex;align-items:center;justify-content:center;transition:color .2s ease}.hdr-btn:hover{color:#fff}.fs-btn{right:0}.theme-btn{right:58px}
 .piai-loader{position:absolute;inset:0;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;z-index:1000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:opacity .3s ease,visibility .3s ease}.piai-loader.hide{opacity:0;visibility:hidden}.piai-loader .loader-inner{padding:14px 28px;border-radius:30px;background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.5);box-shadow:0 8px 32px 0 rgba(31,38,135,0.15);display:flex;align-items:center;gap:12px}.spinner{width:24px;height:24px;border:3px solid transparent;border-top-color:var(--piai-primary,#007bff);border-right-color:var(--piai-primary,#007bff);border-radius:50%;animation:spin .8s linear infinite}.loader-text{font-size:16px;font-weight:600;color:#333}@keyframes spin{to{transform:rotate(360deg)}}
 .piai-brand{position:absolute;right:-20px;bottom:12px;width:96px;height:26px;background:var(--piai-primary);opacity:.95;pointer-events:none;z-index:10;-webkit-mask-image:url("https://piai-embed-engine.vercel.app/public/logo.svg");-webkit-mask-repeat:no-repeat;-webkit-mask-position:left center;-webkit-mask-size:contain;mask-image:url("https://piai-embed-engine.vercel.app/public/logo.svg");mask-repeat:no-repeat;mask-position:left center;mask-size:contain}
-/* MathJax */
+.piai-skeleton{width:100%;height:100%;background:linear-gradient(90deg,var(--piai-bg) 25%,rgba(255,255,255,0.15) 50%,var(--piai-bg) 75%);background-size:200% 100%;animation:piai-shimmer 1.5s ease-in-out infinite;display:flex;align-items:center;justify-content:center;color:var(--piai-text-light);font-size:14px;font-weight:500}@keyframes piai-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .MathJax,.MathJax_Display,.MathJax svg,mjx-container,mjx-container svg{image-rendering:-webkit-optimize-contrast;-webkit-font-smoothing:antialiased;shape-rendering:geometricPrecision;text-rendering:geometricPrecision}.MathJax,mjx-container{transform:none!important;backface-visibility:visible!important}`;
     }
 
@@ -314,36 +275,12 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         const origin = window.location.origin;
         const gameUrl = config.gameUrl;
         const gameOrigin = config.gameOrigin || safeOrigin(gameUrl);
-        const mateId = config.mateId || DEFAULT_CONFIG.mateId;
 
         const cookieRaw = document.cookie || '';
         const safeCookie = cookieRaw.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
 
-        const bases = [];
-        if (Array.isArray(config.apiBases)) {
-            for (let i = 0; i < config.apiBases.length; i++) bases.push(normalizeApiBase(config.apiBases[i], origin));
-        }
-        const abs = normalizeApiBase(config.apiBase, origin);
-        if (abs) bases.push(abs);
-
-        bases.push(origin + '/api/minigames/');
-        bases.push('https://apps.pistudy.vn/api/minigames/');
-        bases.push('https://pistudy.vn/api/minigames/');
-
-        const apiBases = uniq(bases);
-
-        const defaultEndpoints = [
-            'question-pool/{mateId}/',
-            'question_pool/{mateId}/',
-            'question-pool/?mate_id={mateId}',
-            'question_pool/?mate_id={mateId}',
-            'question-pool/{mateId}',
-            'question_pool/{mateId}',
-        ];
-
-        const eps = Array.isArray(config.questionPoolEndpoints) && config.questionPoolEndpoints.length
-            ? config.questionPoolEndpoints
-            : defaultEndpoints;
+        // v3.18.0: Use questionPoolConfig instead of mateId
+        const qpConfig = config.questionPoolConfig || DEFAULT_CONFIG.questionPoolConfig;
 
         return `
       <div class="piai-wrap" style="background:transparent;">
@@ -357,14 +294,11 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
       (function(){
         const CFG = {
           cookies: \`${safeCookie}\`,
-          apiBases: ${JSON.stringify(apiBases)},
-          apiBase: null,
-          eps: ${JSON.stringify(eps)},
-          mateId: "${mateId}",
           gameKey: "${config.gameKey || 'unknown-game'}",
           gameUrl: "${gameUrl}",
           gameOrigin: "${gameOrigin}",
-          debug: ${!!config.debug}
+          debug: ${!!config.debug},
+          questionPoolConfig: ${JSON.stringify(qpConfig)}
         };
 
         function log(m, d){ if(CFG.debug) console.log("[Bridge] "+m, d||""); }
@@ -416,7 +350,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
               }
             }
           }catch(e){}
-
           try{
             var referrer = document.referrer || '';
             if(referrer){
@@ -435,7 +368,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
               }
             }
           }catch(e){}
-
           try{
             var anc = window;
             var depth = 0;
@@ -461,17 +393,24 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
               depth++;
             }
           }catch(e){}
-
           return '';
         }
+
         async function fetchTry(url, options){
           return await fetch(url, options);
         }
 
+        // v3.18.0: Simplified API - only for logs, no question pool fetching
+        const API_BASES = [
+          window.location.origin + '/api/minigames/',
+          'https://apps.pistudy.vn/api/minigames/',
+          'https://pistudy.vn/api/minigames/'
+        ];
+        let apiBase = null;
+
         async function apiAny(endpoint, options){
           const opt = Object.assign({ credentials:"include" }, options || {});
-          const list = CFG.apiBase ? [CFG.apiBase] : CFG.apiBases;
-
+          const list = apiBase ? [apiBase] : API_BASES;
           let lastErr = null;
           for(let i=0;i<list.length;i++){
             const base = list[i];
@@ -479,7 +418,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             try{
               const res = await fetchTry(url, opt);
               if(!res.ok) throw new Error("HTTP "+res.status);
-              CFG.apiBase = base;
+              apiBase = base;
               return res;
             }catch(e){
               lastErr = e;
@@ -493,10 +432,8 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             const res = await apiAny("logs/");
             const data = await res.json();
             const rows = Array.isArray(data) ? data : (data.results || []);
-            
             let playCount = 0, bestScore = 0;
             const history = [];
-            
             rows.forEach(item => {
               if(item.payload && item.payload.gameKey === CFG.gameKey){
                 if(item.msgtype === 'RESULT'){
@@ -504,7 +441,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
                   const s = Number(item.payload.score || 0);
                   if(s > bestScore) bestScore = s;
                 }
-                
                 history.push({
                   id: item.id,
                   msgtype: item.msgtype,
@@ -513,12 +449,9 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
                 });
               }
             });
-            
             history.sort((a, b) => (b.tsms || 0) - (a.tsms || 0));
             const recentHistory = history.slice(0, 50);
-            
             log("fetchStats", { playCount, bestScore, historyCount: recentHistory.length });
-            
             return { playCount, bestScore, history: recentHistory };
           }catch(e){
             log("fetchStats error", e);
@@ -530,9 +463,7 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           try{
             const res = await apiAny("user-stats/");
             const data = await res.json();
-            
             log("fetchUserStats", data);
-            
             return {
               total_coins: data.total_coins || 0,
               total_xp: data.total_xp || 0,
@@ -547,15 +478,12 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         async function saveResult(data){
           try{
             const body = data;
-
             log("saveResult body", body);
-
             await apiAny("logs/", {
               method:"POST",
               headers:{ "Content-Type":"application/json", "X-CSRFToken": getCookie("csrftoken") || "" },
               body: JSON.stringify(body)
             });
-            
             log("saveResult success");
             return true;
           }catch(e){
@@ -564,55 +492,8 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
           }
         }
 
-        function buildEndpoint(tpl, mateId){
-          return String(tpl).replaceAll("{mateId}", encodeURIComponent(mateId));
-        }
-
-        async function fetchQuestionPool(mateId){
-          const mid = mateId || CFG.mateId;
-
-          const bases = CFG.apiBase ? [CFG.apiBase].concat(CFG.apiBases) : CFG.apiBases.slice();
-          const baseList = [];
-          const seen = new Set();
-          for(let i=0;i<bases.length;i++){
-            const b = String(bases[i]||'');
-            if(!b) continue;
-            if(!seen.has(b)){ seen.add(b); baseList.push(b); }
-          }
-
-          let lastErr = null;
-
-          for(let bi=0; bi<baseList.length; bi++){
-            const base = baseList[bi];
-
-            for(let ei=0; ei<CFG.eps.length; ei++){
-              const ep = buildEndpoint(CFG.eps[ei], mid);
-              const url = base + ep;
-
-              try{
-                const res = await fetchTry(url, { credentials:"include" });
-                if(res.ok){
-                  CFG.apiBase = base;
-                  log("question-pool OK", { base: base, endpoint: ep });
-                  return await res.json();
-                }
-                if(res.status === 404){
-                  lastErr = new Error("HTTP 404");
-                  continue;
-                }
-                lastErr = new Error("HTTP "+res.status);
-              }catch(e){
-                lastErr = e;
-              }
-            }
-          }
-
-          throw lastErr || new Error("No valid question-pool endpoint");
-        }
-
         const iframe = document.querySelector("iframe.game-frame");
         const loader = document.getElementById("loader");
-
         iframe.onload = function(){ setTimeout(function(){ loader.classList.add("hide"); }, 500); };
 
         function send(data){
@@ -640,13 +521,10 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
             },
             history: statsWithHistory.history,
             env: { 
-              gameKey: CFG.gameKey, 
-              mateId: CFG.mateId, 
-              apiBase: CFG.apiBase || "", 
-              apiBases: CFG.apiBases 
+              gameKey: CFG.gameKey,
+              questionPoolConfig: CFG.questionPoolConfig
             }
           };
-          
           log("sendBaseData", { stats: data.stats, total_coins: data.total_coins, historyCount: data.history.length });
           send(data);
         }
@@ -654,7 +532,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         window.addEventListener("message", function(event){
           if(CFG.gameOrigin && event.origin !== CFG.gameOrigin) return;
           const msg = event.data || {};
-
           (async function(){
             if(msg.type === "MINIGAME_READY" || (msg.type === "MINIGAME_ACTION" && msg.action === "REFRESH_STATS")){
               log("Received MINIGAME_READY or REFRESH_STATS");
@@ -662,7 +539,6 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
               const us = await fetchUserStats();
               sendBaseData(st, us);
             }
-
             if(msg.type === "MINIGAME_ACTION" && msg.action === "SAVE_RESULT"){
               log("Received SAVE_RESULT", msg.data);
               await saveResult(msg.data || {});
@@ -670,21 +546,34 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
               const us = await fetchUserStats();
               sendBaseData(st, us);
             }
-
-            if(msg.type === "MINIGAME_ACTION" && (msg.action === "FETCH_QUESTION_POOL" || msg.action === "GET_QUESTION_POOL")){
-              const mid = (msg.data && msg.data.mateId) || msg.mateId || CFG.mateId;
-              try{
-                const qp = await fetchQuestionPool(mid);
-                send({ type:"MINIGAME_QUESTION_POOL", mateId: mid, payload: qp });
-              }catch(e){
-                send({ type:"MINIGAME_QUESTION_POOL", mateId: mid, payload: null, error: String(e && e.message ? e.message : e) });
-              }
-            }
           })();
         });
       })();
       <\/script>
     `;
+    }
+
+    function renderLazy(options) {
+        if (!options.id) { console.error('[PiAI Engine] renderLazy requires an id'); return; }
+
+        const container = document.getElementById(options.id);
+        if (container) {
+            container.innerHTML = `<div class="piai-skeleton" style="aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#f0f0f0;">Đang tải...</div>`;
+        }
+
+        const opts = Object.assign({}, DEFAULT_CONFIG, options);
+        const threshold = opts.lazyThreshold || 200;
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    observer.disconnect();
+                    render(opts);
+                }
+            });
+        }, { rootMargin: `${threshold}px` });
+
+        if (container) observer.observe(container);
     }
 
     function render(options) {
@@ -742,43 +631,34 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         iframe.sandbox = 'allow-scripts allow-same-origin allow-pointer-lock allow-modals allow-popups';
         iframe.allow = 'fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media';
 
-        // CHANGED v3.16.0: Reduced delay from 500ms to 100ms for faster blob URL revocation
         iframe.onload = function () {
             setTimeout(function () {
                 try { URL.revokeObjectURL(blobUrl); } catch (_) { }
             }, 100);
+
+            if (debug && performance.memory) {
+                const usedMB = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2);
+                const limitMB = (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2);
+                debugLog('Memory', { used: `${usedMB}MB`, limit: `${limitMB}MB` }, debug);
+            }
+
             if (iframe.contentWindow) {
-                iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.16.1' }, '*');
+                iframe.contentWindow.postMessage({ type: 'piaiInit', id: containerId, version: '3.18.0' }, '*');
                 iframe.contentWindow.postMessage({ type: 'piaiApplyTheme', id: containerId, themeName: currentThemeName, theme: currentTheme }, '*');
             }
             if (typeof onReady === 'function') onReady(iframe, ctxBase);
         };
+
         let isFull = false;
         let resizeRAF = null;
         let lastScale = 1;
-        let baseHeight = 0;
-
-        const isTextEditing = () => {
-            const el = document.activeElement;
-            if (!el) return false;
-            if (el instanceof HTMLInputElement) {
-                const textTypes = ['text', 'password', 'email', 'search', 'tel', 'url', 'number'];
-                return textTypes.includes(el.type);
-            }
-            if (el instanceof HTMLTextAreaElement) return true;
-            if (el instanceof HTMLElement && el.isContentEditable) return true;
-            return false;
-        };
 
         const updateScale = () => {
             const rect = container.getBoundingClientRect();
-
             const containerWidth = isFull ? window.innerWidth : (rect.width || container.clientWidth || width);
             const containerHeight = isFull ? window.innerHeight : (rect.height || container.clientHeight || height);
 
-            if (containerWidth <= 0 || !Number.isFinite(containerWidth)) {
-                return;
-            }
+            if (containerWidth <= 0 || !Number.isFinite(containerWidth)) return;
 
             let scale;
             if (isFull) {
@@ -787,16 +667,10 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
                 scale = containerWidth / width;
             }
 
-            if (!Number.isFinite(scale) || scale <= 0) {
-                scale = lastScale || 1;
-            }
-
-            if (Math.abs(scale - lastScale) < 0.005 && lastScale > 0) {
-                return;
-            }
+            if (!Number.isFinite(scale) || scale <= 0) scale = lastScale || 1;
+            if (Math.abs(scale - lastScale) < 0.005 && lastScale > 0) return;
 
             lastScale = scale;
-
             const scaledW = width * scale;
             const scaledH = height * scale;
 
@@ -845,14 +719,11 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
 
             if (e.data.type === 'toggleFullscreen') {
                 const { isIOS } = detectDevice();
-
                 if (isIOS) {
                     window.open(iframe.src, '_blank');
                     return;
                 }
-
                 const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
-
                 if (!fsElement) {
                     if (container.requestFullscreen) {
                         container.requestFullscreen()
@@ -865,34 +736,24 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
                         setFullscreen(true);
                     }
                 } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    }
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                     setFullscreen(false);
                 }
             }
-
             if (e.data.type === 'switchTheme') switchTheme();
         };
 
         const onFullscreenChange = () => {
             const { isIOS } = detectDevice();
             const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
-
-            if (fsElement && fsElement === container) {
-                setFullscreen(true);
-            } else if (!fsElement && !isIOS) {
-                setFullscreen(false);
-            }
+            if (fsElement && fsElement === container) setFullscreen(true);
+            else if (!fsElement && !isIOS) setFullscreen(false);
         };
 
         const onKeydown = (e) => {
             const { isIOS } = detectDevice();
-            if (e.key === 'Escape' && isFull && isIOS) {
-                setFullscreen(false);
-            }
+            if (e.key === 'Escape' && isFull && isIOS) setFullscreen(false);
         };
 
         const onResize = () => {
@@ -927,35 +788,17 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
-        // CHANGED v3.16.0: Enhanced cleanup function for memory leak prevention
         function cleanup() {
-            // Clear iframe src to prevent memory leak
-            try {
-                if (iframe && iframe.src) {
-                    iframe.src = 'about:blank';
-                }
-            } catch (_) { }
-
-            // Revoke blob URL
+            try { if (iframe && iframe.src) iframe.src = 'about:blank'; } catch (_) { }
             try { URL.revokeObjectURL(blobUrl); } catch (_) { }
-
-            // Remove event listeners
             window.removeEventListener('message', onMessage);
             document.removeEventListener('fullscreenchange', onFullscreenChange);
             document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
             document.removeEventListener('keydown', onKeydown);
             window.removeEventListener('resize', onResize);
             window.removeEventListener('orientationchange', onOrientationChange);
-
-            // Disconnect observer
             try { observer.disconnect(); } catch (_) { }
-
-            // Remove iframe
-            try {
-                if (iframe && iframe.parentNode) {
-                    iframe.remove();
-                }
-            } catch (_) { }
+            try { if (iframe && iframe.parentNode) iframe.remove(); } catch (_) { }
         }
 
         container.__piaiCleanup = cleanup;
@@ -963,23 +806,22 @@ iframe.game-frame{border:none;width:100%;height:100%;display:block}
         container.appendChild(wrapper);
         updateScale();
 
-        // NEW v3.16.1: Trigger CDN preload on first render
         if (!preloadInitialized) {
             preloadInitialized = true;
             setTimeout(preloadCDN, 0);
         }
 
-        debugLog('Embed mounted successfully', { containerId, version: '3.16.1' }, debug);
+        debugLog('Embed mounted successfully', { containerId, version: '3.18.0' }, debug);
     }
 
     global.PiaiEmbed = {
-        version: '3.16.1',
+        version: '3.18.0',
         render,
+        renderLazy,
         themes: THEMES,
         getThemeByName,
         getBaseCss,
         defaults: DEFAULT_CONFIG,
-        // NEW v3.16.1: Expose CDN utilities for advanced usage
         cdn: {
             registry: CDN_REGISTRY,
             loadScript: loadCDNScript,
