@@ -47,7 +47,7 @@
   const ENGINE_VERSION = '4.3.0';
   const SYSTEM_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
   const DEFAULT_ENGINE_SRC = 'https://piai-embed-engine.vercel.app/public/piai-embed-engine.js';
-  const BRAND_DATA_URI = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 36" fill="none"%3E%3Crect x="1.5" y="1.5" width="34" height="33" rx="8" stroke="%230078D4" stroke-width="3"/%3E%3Cpath d="M12 18h12M18 12v12" stroke="%230078D4" stroke-width="3" stroke-linecap="round"/%3E%3Cpath d="M50 8h11.5c6.5 0 10 2.9 10 8.1S68 24.4 61.6 24.4H56v6.2h-6V8Zm6 11.5h4.5c3.3 0 5-1 5-3.5s-1.7-3.3-5-3.3H56v6.8Z" fill="%230078D4"/%3E%3Cpath d="M77.2 8h6v22.6h-6V8Zm11 0h6.4l4.8 7.6L104.4 8h6.4l-8.2 12 8.6 10.6h-6.7l-5.1-6.9-5.1 6.9h-6.7L96.1 20 88.2 8Z" fill="%231D2433"/%3E%3C/svg%3E';
+  const BRAND_DATA_URI = 'https://piai-embed-engine.vercel.app/public/logo.svg';
   const MAX_DOC_CACHE = 72;
   const DEFAULT_TIMEOUTS = {
     iframeReadyMs: 6000,
