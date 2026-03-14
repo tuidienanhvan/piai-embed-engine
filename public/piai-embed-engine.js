@@ -13,16 +13,8 @@
 (function (global) {
   'use strict';
 
+  // Đã sắp xếp lại mảng THEMES theo đúng thứ tự logic: educational -> classic -> night
   const THEMES = {
-    classic: {
-      name: 'classic',
-      primary: '#800020',
-      accent: '#C9A227',
-      secondary: '#1E4D78',
-      bg: '#FAF8F5',
-      text: '#2D3748',
-      textLight: '#718096'
-    },
     educational: {
       name: 'educational',
       primary: '#1976D2',
@@ -31,6 +23,15 @@
       bg: '#FAFAFA',
       text: '#1A1A1A',
       textLight: '#5F6368'
+    },
+    classic: {
+      name: 'classic',
+      primary: '#800020',
+      accent: '#C9A227',
+      secondary: '#1E4D78',
+      bg: '#FAF8F5',
+      text: '#2D3748',
+      textLight: '#718096'
     },
     night: {
       name: 'night',
@@ -709,7 +710,10 @@
   function updateThemeButton(instance) {
     if (!instance || !instance.frameDocument) return;
     const iconTarget = instance.frameDocument.getElementById((instance.frameOptions && instance.frameOptions.themeIconId) || 'themeBtnIcon');
-    const iconName = instance.currentThemeName === 'educational' ? 'graduation-cap' : instance.currentThemeName === 'night' ? 'moon-star' : 'book-open';
+    
+    // Đã chỉnh sửa biểu thức bậc 3 để đọc theo đúng thứ tự logic: educational -> classic -> night
+    const iconName = instance.currentThemeName === 'educational' ? 'graduation-cap' : (instance.currentThemeName === 'classic' ? 'book-open' : 'moon-star');
+    
     setElementIcon(iconTarget, iconName);
   }
 
